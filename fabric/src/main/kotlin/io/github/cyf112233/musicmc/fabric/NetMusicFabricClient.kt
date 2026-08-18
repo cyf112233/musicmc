@@ -11,6 +11,7 @@ package io.github.cyf112233.musicmc.fabric
 import com.mojang.blaze3d.platform.InputConstants
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.ChatLyricSender
+import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.MusicHudRenderer
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -50,13 +51,15 @@ class NetMusicFabricClient : ClientModInitializer {
         }
 
         // 游戏内 HUD(悬浮音乐面板)。26.1 起 fabric-api 的 HUD 回调为
-        // HudElementRegistry.addLast(Identifier, HudElement),HudElement.extractRenderState
-        // 签名 (GuiGraphicsExtractor, DeltaTracker) 与 neoforge GuiLayer.render 一致,
-        // 共用 MusicHudRenderer.onFrame(javap 已核实,见 HudRenderCallback 已移除)。
+        // HudElementRegistry.addLast(Identifier, HudElement)(旧版 HudRenderCallback
+        // 已移除,javap 已核实 fabric-rendering-v1 25.3.2 只有 HudElementRegistry)。
+        // 回调拿到 (GuiGraphicsExtractor, DeltaTracker) 后立即包成统一绘制接口
+        // HudGui(见 common GuiGraphicsHudGui),common 渲染逻辑不再直接碰 MC
+        // blit / fill / text 等版本差异大的内部 API —— 版本差异全部隔离在该适配器内。
         HudElementRegistry.addLast(
             Identifier.fromNamespaceAndPath("musicmc", "music_hud"),
-        ) { graphics, delta ->
-            MusicHudRenderer.onFrame(graphics, delta)
+        ) { graphics, _ ->
+            MusicHudRenderer.onFrame(GuiGraphicsHudGui(graphics))
         }
 
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->

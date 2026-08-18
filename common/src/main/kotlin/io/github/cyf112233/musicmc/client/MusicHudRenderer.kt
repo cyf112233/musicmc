@@ -1,30 +1,29 @@
 package io.github.cyf112233.musicmc.client
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.HudGui
 import io.github.cyf112233.musicmc.ui.hud.HudFrame
 import io.github.cyf112233.musicmc.ui.hud.HudLayout
 import io.github.cyf112233.musicmc.ui.hud.HudLyricsCache
-import net.minecraft.client.DeltaTracker
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.Font
-import net.minecraft.client.gui.GuiGraphicsExtractor
 import kotlin.math.roundToInt
 
 /**
  * 游戏内 HUD(悬浮音乐面板)渲染入口(仅 fabric / neoforge 编译,允许 net.minecraft)。
  *
- * fabric 端由 HudElementRegistry 注册的 HudElement.extractRenderState 调用,
- * neoforge 端由 RegisterGuiLayersEvent.registerAboveAll 注册的 GuiLayer.render 调用,
- * 两者签名一致,都走 [onFrame](主线程 / 渲染线程,GL 上下文有效)。
+ * fabric 端由 HudElementRegistry 注册的 HudElement 回调调用,
+ * neoforge 端由 RegisterGuiLayersEvent 注册的 GuiLayer 回调调用,
+ * 两平台回调先把各自的 GuiGraphicsExtractor 包装成 [HudGui](见 [GuiGraphicsHudGui])
+ * 再传入本入口 —— common 不直接操作 MC 的 blit / fill / text / pose 等版本差异大的
+ * 渲染 API,那些差异全部隔离在平台适配器内。
  *
  * 纯显示:不读鼠标 / 按键,位置只来自 config.hudX/hudY(由 HUD 编辑器持久化)。
- * 绘制全部使用 GuiGraphicsExtractor 公开方法,坐标 = GUI 缩放坐标(逻辑 px × hudScale);
- * 文本字号用 pose 缩放实现(blit / text 在调用时复制当前 pose 到 render state,
- * 已 javap 验证,故 push/transform/draw/pop 安全)。
+ * 坐标 = GUI 缩放坐标(逻辑像素)。
  *
- * 封面纹理:后台线程只做下载 / 解码 / 圆形遮罩,onFrame 开头调
- * CoverTextureCache.pump() 在 GL 上下文内创建 DynamicTexture 并注册(修复游戏内
- * 封面不显示 —— 旧实现经 Async.onUi 创建,切到的是 MUI 主线程而非 GL 渲染线程)。
+ * 封面纹理:后台线程只做下载 / 解码 / CPU 端方形预裁剪(见 CoverTextureCache),
+ * onFrame 开头调 CoverTextureCache.pump() 在 GL 上下文内创建 DynamicTexture 并注册;
+ * 绘制时以全图对称 UV 交给 [HudGui.drawTexture],不依赖具体 MC 版本对
+ * blit UV 参数顺序的定义。
  */
 object MusicHudRenderer {
 
@@ -58,8 +57,8 @@ object MusicHudRenderer {
     private fun coverUrlTag(url: String?): String =
         url?.let { if (it.length > 100) it.take(100) + "…" else it } ?: "(无封面)"
 
-    /** 渲染入口(fabric HudElement / neoforge GuiLayer 每帧调用) */
-    fun onFrame(graphics: GuiGraphicsExtractor, delta: DeltaTracker) {
+    /** 渲染入口(fabric HudElement / neoforge GuiLayer 每帧调用,delta 未使用故不接收) */
+    fun onFrame(gui: HudGui) {
         val mc = Minecraft.getInstance()
 
         // a) 每帧先驱动封面纹理注册(本回调在 extract/渲染阶段,GL 上下文有效;
@@ -107,8 +106,8 @@ object MusicHudRenderer {
         // d) 布局(锚点 / 缩放只读配置,不做任何交互)
         //    HUD 歌词开关关闭时不传歌词快照(HUD 歌词块不画;聊天栏歌词不受影响)
         val frame = HudLayout.compute(
-            w = graphics.guiWidth(),
-            h = graphics.guiHeight(),
+            w = gui.guiWidth(),
+            h = gui.guiHeight(),
             scale = config.hudScale,
             player = player,
             lyric = if (config.hudLyricEnabled) HudLyricsCache.current else null,
@@ -117,15 +116,15 @@ object MusicHudRenderer {
         ) ?: return
 
         // e) 绘制
-        drawCover(graphics, frame)
-        drawTexts(graphics, mc, frame, config.hudScale)
-        drawProgressBar(graphics, frame)
+        drawCover(gui, frame)
+        drawTexts(gui, frame, config.hudScale)
+        drawProgressBar(gui, frame)
     }
 
     // ---------------- 绘制 ----------------
 
-    /** 封面:纹理就绪则 blit(方形,无旋转),否则占位块 */
-    private fun drawCover(graphics: GuiGraphicsExtractor, frame: HudFrame) {
+    /** 封面:纹理就绪则全图绘制(已 CPU 预裁剪方形,blit 对称 UV 见适配器),否则占位块 */
+    private fun drawCover(gui: HudGui, frame: HudFrame) {
         if (!frame.showCover) return
         val id = CoverTextureCache.currentIdentifier()
         val url = frame.song?.picUrl
@@ -136,140 +135,74 @@ object MusicHudRenderer {
             coverLogReady = ready
             val tag = coverUrlTag(url)
             if (ready) {
-                // 附上源图尺寸 / 中心裁剪 UV / 目标矩形,排查方形显示问题时直接看日志
-                val uv = coverUv(CoverTextureCache.currentImageSize(), frame.cover.w, frame.cover.h)
+                // 纹理已是方形(CPU 预裁剪),绘制恒为全图对称 UV,不涉及版本差异;
+                // 记源尺寸与目标矩形,排查显示问题时直接看日志
                 coverLog(
                     "info",
                     "HUD 封面纹理就绪,开始绘制: $tag | src=${CoverTextureCache.currentImageSize()} " +
-                        "uv=[${uv[0]},${uv[1]},${uv[2]},${uv[3]}] rect=${frame.cover.x},${frame.cover.y},${frame.cover.w}x${frame.cover.h}",
+                        "rect=${frame.cover.x},${frame.cover.y},${frame.cover.w}x${frame.cover.h}(方形预裁剪,全图绘制)",
                 )
             } else {
                 coverLog("warn", "HUD 封面纹理未就绪,绘制占位块: $tag")
             }
         }
         if (id != null) {
-            // 按源图片比例中心裁剪 UV(cover 矩形为方形;B 站封面 16:9,不裁剪会压扁变形)
-            val uv = coverUv(CoverTextureCache.currentImageSize(), frame.cover.w, frame.cover.h)
-            // MC 26.1.2 blit 九参重载的 UV 字段顺序为 u0, u1, v0, v1(见 BlitRenderState,
-            // innerBlit 把调用方 (u0, v0, u1, v1) 原样填入),传参必须按此顺序:
-            // 水平范围在前、垂直范围在后。若按直觉的 (u0, v0, u1, v1) 传,非对称 UV 会
-            // u/v 交换,裁出的是源图角落区域(用户反馈"封面像把右下角割下来用")。
-            val (u0, v0, u1, v1) = uv
-            graphics.blit(id, frame.cover.x, frame.cover.y, frame.cover.w, frame.cover.h, u0, u1, v0, v1)
+            // 纹理已中心裁剪为方形,直接铺满 cover 矩形;适配器内用全图对称 UV blit,
+            // 不在此计算裁剪 UV(旧实现按比例算 UV 依赖 MC 版本对 blit 参数顺序的定义)
+            gui.drawTexture(id, frame.cover.x, frame.cover.y, frame.cover.w, frame.cover.h)
         } else {
             // 占位块(纹理加载中 / 无封面 / 加载失败)
             val c = frame.cover
-            graphics.fill(c.x, c.y, c.x + c.w, c.y + c.h, 0xFF333333.toInt())
+            gui.fill(c.x, c.y, c.x + c.w, c.y + c.h, 0xFF333333.toInt())
         }
     }
 
-    /**
-     * 计算中心裁剪 UV(u0, v0, u1, v1,归一化 0..1):保持源图宽高比铺满目标矩形,
-     * 超出目标比例的边居中裁掉。目标为方形且源图为 16:9 时裁左右。
-     * 无尺寸信息(纹理注册前)恒返回全图。
-     */
-    private fun coverUv(size: Pair<Int, Int>?, dstW: Int, dstH: Int): FloatArray {
-        val (iw, ih) = size ?: return floatArrayOf(0f, 0f, 1f, 1f)
-        if (iw <= 0 || ih <= 0 || dstW <= 0 || dstH <= 0) return floatArrayOf(0f, 0f, 1f, 1f)
-        val imgAspect = iw.toFloat() / ih
-        val dstAspect = dstW.toFloat() / dstH
-        var u0 = 0f
-        var v0 = 0f
-        var u1 = 1f
-        var v1 = 1f
-        if (imgAspect > dstAspect) {
-            val crop = 1f - dstAspect / imgAspect
-            u0 = crop / 2f
-            u1 = 1f - crop / 2f
-        } else if (imgAspect < dstAspect) {
-            val crop = 1f - imgAspect / dstAspect
-            v0 = crop / 2f
-            v1 = 1f - crop / 2f
-        }
-        return floatArrayOf(u0, v0, u1, v1)
-    }
-
-    /** 文本:标题 / 艺术家 / 时间 / 歌词块(字号用 pose 缩放,颜色固定值,注释见报告) */
-    private fun drawTexts(graphics: GuiGraphicsExtractor, mc: Minecraft, frame: HudFrame, scale: Float) {
-        val font = mc.font
+    /** 文本:标题 / 艺术家 / 时间 / 歌词块(字号缩放由适配器 [HudGui.drawText] 内部完成) */
+    private fun drawTexts(gui: HudGui, frame: HudFrame, scale: Float) {
         val textW = frame.bar.w.toFloat()
         // 统一缩放系数:布局(HudLayout)所有尺寸都乘 s = scale×0.5,字号必须同系数,
         // 否则行距(按 s)< 字高(按 scale)导致文字重叠;编辑器侧同样用 s,两侧一致。
         val s = scale.coerceIn(0.5f, 2f) * 0.5f
 
-        drawScaledText(
-            graphics, mc,
-            truncate(font, frame.title, textW, HudLayout.TITLE_SIZE / font.lineHeight * s),
+        gui.drawText(
+            truncate(gui, frame.title, textW, HudLayout.TITLE_SIZE / gui.textHeight() * s),
             frame.titleX, frame.titleY, HudLayout.TITLE_SIZE, s, 0xFFFFFFFF.toInt(),
         )
         if (frame.artist.isNotBlank()) {
-            drawScaledText(
-                graphics, mc,
-                truncate(font, frame.artist, textW, HudLayout.SUB_SIZE / font.lineHeight * s),
+            gui.drawText(
+                truncate(gui, frame.artist, textW, HudLayout.SUB_SIZE / gui.textHeight() * s),
                 frame.artistX, frame.artistY, HudLayout.SUB_SIZE, s, 0xFFAAAAAA.toInt(),
             )
         }
-        drawScaledText(graphics, mc, frame.timeText, frame.timeX, frame.timeY, HudLayout.SUB_SIZE, s, 0xFFBBBBBB.toInt())
+        gui.drawText(frame.timeText, frame.timeX, frame.timeY, HudLayout.SUB_SIZE, s, 0xFFBBBBBB.toInt())
 
         // 歌词块:仅当前行(高亮);超长时横向往返滚动(不截断,见 HudLayout.lyricScrollOffset)
         if (frame.lyricLines.isNotEmpty()) {
             val i = frame.lyricCurrentIndex
             val text = frame.lyricLines[i]
             val size = HudLayout.LYRIC_CURRENT_SIZE
-            val k = size / font.lineHeight * s
-            val textWpx = font.width(text) * k
+            val k = size / gui.textHeight() * s
+            val textWpx = gui.textWidth(text) * k
             val offsetX = HudLayout.lyricScrollOffset(System.currentTimeMillis(), textWpx, textW)
-            drawScaledText(
-                graphics, mc,
-                text,
-                frame.lyricX + offsetX.roundToInt(), frame.lyricY,
-                size, s, 0xFF4FC3F7.toInt(),
-            )
+            gui.drawText(text, frame.lyricX + offsetX.roundToInt(), frame.lyricY, size, s, 0xFF4FC3F7.toInt())
         }
     }
 
     /** 进度条:背景半透明深色 fill + 前景白色 fill(渲染层拿不到 MUI theme,用固定色) */
-    private fun drawProgressBar(graphics: GuiGraphicsExtractor, frame: HudFrame) {
+    private fun drawProgressBar(gui: HudGui, frame: HudFrame) {
         val b = frame.bar
         if (b.w <= 0 || b.h <= 0) return
-        graphics.fill(b.x, b.y, b.x + b.w, b.y + b.h, 0x80000000.toInt())
+        gui.fill(b.x, b.y, b.x + b.w, b.y + b.h, 0x80000000.toInt())
         val fw = (b.w * frame.progress).toInt().coerceIn(0, b.w)
-        if (fw > 0) graphics.fill(b.x, b.y, b.x + fw, b.y + b.h, 0xFFFFFFFF.toInt())
-    }
-
-    /**
-     * 以 [sizePx] 逻辑字号绘制文本:pose push → translate(x,y) →
-     * scale(sizePx/lineHeight × sf) → text(font, text, 0, 0, color) → pop
-     * (GuiTextRenderState 在调用时复制 pose,已 javap 验证)。
-     *
-     * [sf] 传统一缩放系数 s = hudScale×0.5(HudLayout 布局与编辑器同一系数,
-     * 保证行距(≥字号)不重叠、两侧字体大小一致)。
-     */
-    private fun drawScaledText(
-        graphics: GuiGraphicsExtractor,
-        mc: Minecraft,
-        text: String,
-        x: Int,
-        y: Int,
-        sizePx: Float,
-        scale: Float,
-        color: Int,
-    ) {
-        if (text.isEmpty()) return
-        val pose = graphics.pose()
-        pose.pushMatrix()
-        pose.translate(x.toFloat(), y.toFloat())
-        pose.scale(sizePx / mc.font.lineHeight * scale)
-        graphics.text(mc.font, text, 0, 0, color)
-        pose.popMatrix()
+        if (fw > 0) gui.fill(b.x, b.y, b.x + fw, b.y + b.h, 0xFFFFFFFF.toInt())
     }
 
     /** 按可用宽度截断文本(考虑缩放系数 [k]),超长加省略号 */
-    private fun truncate(font: Font, text: String, maxWidth: Float, k: Float): String {
+    private fun truncate(gui: HudGui, text: String, maxWidth: Float, k: Float): String {
         if (text.isEmpty() || maxWidth <= 0f) return text
-        if (font.width(text) * k <= maxWidth) return text
+        if (gui.textWidth(text) * k <= maxWidth) return text
         var t = text
-        while (t.length > 1 && font.width(t + "…") * k > maxWidth) {
+        while (t.length > 1 && gui.textWidth(t + "…") * k > maxWidth) {
             t = t.dropLast(1)
         }
         return t + "…"

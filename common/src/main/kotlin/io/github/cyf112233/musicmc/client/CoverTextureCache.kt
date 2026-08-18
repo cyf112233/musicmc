@@ -25,7 +25,8 @@ import javax.imageio.ImageIO
  * 生命周期(修复"游戏内封面不显示"):
  * - 后台线程:Http.openStream(url) 整包下载(带 B 站 Referer)→ 优先
  *   [ImageDecoder.decode](FFmpeg 解内存缓冲,覆盖 jpg/png/webp/avif;失败/Native 不可用
- *   回退 NativeImage.read 保底)→ 放入 [readyQueue] 待注册;
+ *   回退 NativeImage.read 保底)→ CPU 端中心裁剪成方形(见 [cropSquare])→
+ *   放入 [readyQueue] 待注册;
  * - 纹理创建(不再是 Async.onUi!):DynamicTexture(Supplier, NativeImage) 构造即
  *   createTexture + upload(javap 已核实),必须在渲染线程 / GL 上下文内执行;
  *   Async.onUi 切到的是 MUI 主线程,不是 GL 渲染线程,故游戏内封面一直不显示。
@@ -47,7 +48,7 @@ object CoverTextureCache {
     /** 已注册纹理:key → AbstractTexture(仅渲染回调线程访问) */
     private val textures = HashMap<String, AbstractTexture>()
 
-    /** 已注册纹理的源图片宽高:key → (w, h)(仅渲染回调线程访问;渲染层按比例中心裁剪用) */
+    /** 已注册纹理的源图片宽高:key → (w, h)(仅渲染回调线程访问;预裁剪后恒为方形) */
     private val sizes = HashMap<String, Pair<Int, Int>>()
 
     /** 当前展示的 key(@Volatile:后台线程比对"是否已切走") */
@@ -84,7 +85,7 @@ object CoverTextureCache {
         return identifier(key)
     }
 
-    /** 当前纹理的源图片宽高(纹理未注册返回 null;渲染层据此按宽高比裁剪,避免 16:9 封面压扁进方形 cover) */
+    /** 当前纹理的源图片宽高(纹理未注册返回 null;预裁剪后恒为方形,仅日志用) */
     fun currentImageSize(): Pair<Int, Int>? {
         val key = currentKey ?: return null
         return sizes[key]
@@ -158,9 +159,14 @@ object CoverTextureCache {
                 logWarn("FFmpeg 解码失败(无结果),回退 stb/ImageIO 解码: url=${urlTag(url)}")
                 decodeFallback(bytes, url)
             }
-            // 只做下载 + 解码;纹理创建(需要 GL 上下文)交给渲染回调 pump
-            readyQueue.add(key to image)
-            logInfo("入队待注册:key=$key url=${urlTag(url)}")
+            // CPU 端中心裁剪成方形:渲染层 blit 恒用全图对称 UV(0,0,1,1),
+            // 不依赖任何 MC 版本对 blit UV 参数顺序的定义 —— 这是 MC 版本差异
+            // 重灾区(26.1 的九参 blit 按 u0,u1,v0,v1 解释,旧版按 u0,v0,u1,v1),
+            // 预裁剪后无论底层怎么解释,显示结果都是整张方形封面,方向 / 比例永远正确。
+            // 纹理创建(需要 GL 上下文)交给渲染回调 pump。
+            val cropped = cropSquare(image)
+            readyQueue.add(key to cropped)
+            logInfo("入队待注册:key=$key ${cropped.getWidth()}x${cropped.getHeight()} url=${urlTag(url)}")
         } catch (e: Exception) {
             pending.remove(key)
             logWarn("加载失败:url=${urlTag(url)} ${e.javaClass.simpleName}: ${e.message}")
@@ -187,6 +193,28 @@ object CoverTextureCache {
             }
         }
         return img
+    }
+
+    /**
+     * 中心裁剪成方形:取源图较短边为边长,从中心裁出方形区域。
+     * 原图已方形时原样返回;否则新建方形图并复制中心区域后关闭原图。
+     * (B 站封面 16:9 → 裁左右;FFmpeg / stb / ImageIO 三条解码路径统一在此裁剪)
+     */
+    private fun cropSquare(img: NativeImage): NativeImage {
+        val w = img.getWidth()
+        val h = img.getHeight()
+        if (w <= 0 || h <= 0 || w == h) return img
+        val side = minOf(w, h)
+        val x0 = (w - side) / 2
+        val y0 = (h - side) / 2
+        val out = NativeImage(NativeImage.Format.RGBA, side, side, false)
+        // 26.1 NativeImage.copyRect 语义(javap 核实):this 读、参数 source 写,
+        // 即 out.copyRect(img, srcX, srcY, dstX, dstY, w, h, flipX, flipY)
+        // = 把 img 的 (srcX, srcY) 起 side×side 拷贝到 out 的 (dstX, dstY)。
+        // 不用 getPixelABGR(26.1 已改 private)逐像素拷贝。
+        out.copyRect(img, x0, y0, 0, 0, side, side, false, false)
+        runCatching { img.close() }
+        return out
     }
 
     /**

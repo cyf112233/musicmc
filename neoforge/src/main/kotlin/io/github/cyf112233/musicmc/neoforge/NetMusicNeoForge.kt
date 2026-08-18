@@ -19,6 +19,7 @@ import org.lwjgl.glfw.GLFW
 import org.slf4j.LoggerFactory
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.ChatLyricSender
+import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.MusicHudRenderer
 import io.github.cyf112233.musicmc.platform.ModPlatform
 import io.github.cyf112233.musicmc.platform.MusicLogger
@@ -75,13 +76,14 @@ class NetMusicNeoForge(private val bus: IEventBus) {
             }
 
             // 4) 游戏内 HUD(悬浮音乐面板):RegisterGuiLayersEvent 是 IModBusEvent,
-            //    挂 mod 总线;GuiLayer.render(GuiGraphicsExtractor, DeltaTracker) 签名
-            //    与 fabric HudElement.extractRenderState 一致,共用 MusicHudRenderer.onFrame。
+            //    挂 mod 总线。回调拿到 (GuiGraphicsExtractor, DeltaTracker) 后立即
+            //    包成统一绘制接口 HudGui(见 common GuiGraphicsHudGui),common 渲染
+            //    逻辑不再直接碰 MC blit / fill / text 等版本差异大的内部 API。
             bus.addListener(RegisterGuiLayersEvent::class.java) { event ->
                 event.registerAboveAll(
                     Identifier.fromNamespaceAndPath("musicmc", "music_hud"),
-                ) { graphics, delta ->
-                    MusicHudRenderer.onFrame(graphics, delta)
+                ) { graphics, _ ->
+                    MusicHudRenderer.onFrame(GuiGraphicsHudGui(graphics))
                 }
             }
         }
