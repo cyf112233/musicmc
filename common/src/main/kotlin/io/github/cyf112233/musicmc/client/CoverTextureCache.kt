@@ -208,11 +208,12 @@ object CoverTextureCache {
         val x0 = (w - side) / 2
         val y0 = (h - side) / 2
         val out = NativeImage(NativeImage.Format.RGBA, side, side, false)
-        // 26.1 NativeImage.copyRect 语义(javap 核实):this 读、参数 source 写,
-        // 即 out.copyRect(img, srcX, srcY, dstX, dstY, w, h, flipX, flipY)
-        // = 把 img 的 (srcX, srcY) 起 side×side 拷贝到 out 的 (dstX, dstY)。
+        // 26.1 NativeImage.copyRect 语义(javap 核实):this 读、参数(source 参数)写,
+        // 即 img.copyRect(out, srcX, srcY, dstX, dstY, w, h, flipX, flipY)
+        // = 把 img(this) 的 (srcX, srcY) 起 side×side 拷贝到 out(参数) 的 (dstX, dstY)。
+        // 方向写反会从目标图(较小)越界读,抛 "outside of image bounds"。
         // 不用 getPixelABGR(26.1 已改 private)逐像素拷贝。
-        out.copyRect(img, x0, y0, 0, 0, side, side, false, false)
+        img.copyRect(out, x0, y0, 0, 0, side, side, false, false)
         runCatching { img.close() }
         return out
     }
