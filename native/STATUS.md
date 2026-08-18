@@ -578,3 +578,9 @@ M6 留下的 windows-arm64 Loader 无平台映射问题(待办 #4)落在此提�
 
 ### 遗留风险
 无(平台矩阵与 windows-arm64 Loader 映射为 M6 既有待办,不属于本次删除引入)。
+---
+
+## 全平台 CI 编译触发记录
+
+- 2026-08-18:HUD 封面绘制修复完成(平台层统一 GUI API / 方形预裁剪 / blit 对角点语义),
+  push 触发 native-build 六平台矩阵重编 + assemble-all 全平台打包(commit 见 git log)。
