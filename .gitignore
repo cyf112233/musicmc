@@ -9,6 +9,6 @@ out/
 bin/
 .kotlin/
 
-# JavaCPP FFmpeg 交叉编译工作区(海量构建产物)与 FFmpeg 源码包
-native/cppbuild/
-native/ffmpeg/
+# JavaCPP FFmpeg 构建脚本与源码包需入库(cppbuild.sh / wrap/ / resource-include / tar.xz);
+# 仅忽略各平台编译树(cppbuild/<platform> 产物,数万文件)
+native/cppbuild/ffmpeg/cppbuild/
