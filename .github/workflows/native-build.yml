@@ -182,6 +182,17 @@ jobs:
       # all 模式实际需要 7 个文件,第 7 个 musicmc-javacpp-windows-arm64.jar 非 CI 产物
       # (bytedeco 1.5.12 无 windows-arm64 坐标,libjnijavacpp.dll 无法从公开源重建),
       # 随仓库 native/toolbox/ 提供,此处复制到 native/build/libs。
+      - name: Debug toolbox presence
+        run: |
+          pwd
+          echo "--- ls native/ ---"
+          ls -la native/ || echo "native/ MISSING"
+          echo "--- ls native/toolbox/ ---"
+          ls -la native/toolbox/ || echo "toolbox/ MISSING"
+          echo "--- git ls-files toolbox ---"
+          git ls-files native/toolbox/
+          echo "--- git status ---"
+          git status --short | head
       - name: Ensure javacpp windows-arm64 jar
         run: |
           mkdir -p native/build/libs
@@ -203,7 +214,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # 诊断:neoform 下载 launchermeta.mojang.com 时曾报 Network is unreachable(ENETUNREACH)
+      - name: Debug launchermeta reachability
+        run: |
+          echo "--- getent ahosts ---"
+          getent ahosts launchermeta.mojang.com || echo "getent FAILED"
+          echo "--- curl v4 ---"
+          curl -4 -sS -m 20 -o /dev/null -w "HTTP %{http_code} ip=%{remote_ip}\n" \
+            https://launchermeta.mojang.com/mc/game/version_manifest_v2.json || echo "curl FAILED"
+          echo "--- gai.conf(非注释)---"
+          grep -v '^#' /etc/gai.conf | grep -v '^$' | head
+          echo "--- java version ---"
+          java -version 2>&1
+
       - name: Build mod jars (all platforms)
+        env:
+          JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
         run: ./gradlew :fabric:build :neoforge:build -PnativePlatform=all --no-daemon
 
       - uses: actions/upload-artifact@v4
