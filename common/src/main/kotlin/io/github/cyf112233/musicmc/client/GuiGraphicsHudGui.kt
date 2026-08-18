@@ -30,14 +30,14 @@ class GuiGraphicsHudGui(private val graphics: GuiGraphicsExtractor) : HudGui {
     }
 
     override fun drawTexture(texture: Any, x: Int, y: Int, w: Int, h: Int) {
-        // 全图 UV (u0, u1, v0, v1) = (0, 1, 0, 1)。
-        // 已 javap 三路核对 MC 26.1.2 的九参 blit:blit(id, x, y, w, h, u0, u1, v0, v1)
-        // → innerBlit 把 int 重排为 (x, y, w, h)、float 原样传入 → BlitRenderState 字段
-        // (x0, y0, x1, y1, u0, u1, v0, v1) 依次接收 → buildVertices 按 水平 [u0..u1]、
-        // 垂直 [v0..v1] 生成顶点 UV。即 UV 参数顺序是 (u0, u1, v0, v1),与旧版
-        // (u0, v0, u1, v1) 不同 —— 封面已 CPU 预裁剪为方形,这里恒用全图对称值,
-        // 不再计算非对称 UV,彻底绕开该版本差异。
-        graphics.blit(texture as Identifier, x, y, w, h, 0f, 1f, 0f, 1f)
+        // MC 26.1 九参 blit 的四个 int 是「两个对角点 (x0, y0, x1, y1)」,
+        // 不是旧版的 (x, y, w, h)!javap 核实:blit(id, x, y, w, h, ...) 的
+        // 第 4/5 个 int 被原样填进 BlitRenderState 的 x1 / y1。
+        // 若按旧语义传 (x, y, w, h):HUD 在左上角时 x0≈x1、y0≈y1 看着"正常"
+        // (实际已缩成 w-x × h-y),挪到右下角后矩形 (x,y)~(w,h) 倒置 →
+        // 倒立放大 / 小孔成像 / 钉点不动(用户实测现象)。这里换算成对角点。
+        // UV 语义同理是 (u0, u1, v0, v1),全图 = (0, 1, 0, 1)。
+        graphics.blit(texture as Identifier, x, y, x + w, y + h, 0f, 1f, 0f, 1f)
     }
 
     override fun textWidth(text: String): Int = mc.font.width(text)
