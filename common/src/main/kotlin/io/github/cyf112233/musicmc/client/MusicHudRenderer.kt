@@ -134,16 +134,20 @@ object MusicHudRenderer {
             coverLogUrl = url
             coverLogReady = ready
             val tag = coverUrlTag(url)
+            // 定点坐标诊断:打印封面矩形的两个定点(左上角 / 右下角)、预计尺寸与
+            // 屏幕尺寸 —— 对照游戏内实际显示位置/大小,可精确定位"漂移/放大/钉点"类问题
+            val c = frame.cover
+            val pts = "左上角=(${c.x},${c.y}) 右下角=(${c.x + c.w},${c.y + c.h}) " +
+                "预计尺寸=${c.w}x${c.h} 屏幕=${gui.guiWidth()}x${gui.guiHeight()}"
             if (ready) {
                 // 纹理已是方形(CPU 预裁剪),绘制恒为全图对称 UV,不涉及版本差异;
                 // 记源尺寸与目标矩形,排查显示问题时直接看日志
                 coverLog(
                     "info",
-                    "HUD 封面纹理就绪,开始绘制: $tag | src=${CoverTextureCache.currentImageSize()} " +
-                        "rect=${frame.cover.x},${frame.cover.y},${frame.cover.w}x${frame.cover.h}(方形预裁剪,全图绘制)",
+                    "HUD 封面纹理就绪,开始绘制: $tag | src=${CoverTextureCache.currentImageSize()} | $pts(方形预裁剪,全图绘制)",
                 )
             } else {
-                coverLog("warn", "HUD 封面纹理未就绪,绘制占位块: $tag")
+                coverLog("warn", "HUD 封面纹理未就绪,绘制占位块: $tag | $pts")
             }
         }
         if (id != null) {
