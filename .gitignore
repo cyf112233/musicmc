@@ -1,0 +1,14 @@
+.gradle/
+.gradle-copy/
+build/
+run/
+.idea/
+*.iml
+.vscode/
+out/
+bin/
+.kotlin/
+
+# JavaCPP FFmpeg 交叉编译工作区(海量构建产物)与 FFmpeg 源码包
+native/cppbuild/
+native/ffmpeg/

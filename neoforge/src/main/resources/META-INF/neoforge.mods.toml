@@ -1,0 +1,40 @@
+# MusicMC — NeoForge mod 元数据。
+#
+# 格式对齐 ModernUI-NeoForge 26.1.2-3.13.0.5 jar 内的 neoforge.mods.toml(已 unzip 验证):
+#   modLoader="javafml" / loaderVersion="[2,)" / 顶层 license 字段 / description 用 ''' 多行串。
+# displayTest:ModernUI 官方 jar 未使用该字段(默认 IGNORE_ALL_VERSION),此处同样省略。
+# 版本信息硬编码(mod_version=0.1.0,由根 gradle.properties 维护,未做变量替换)。
+modLoader="javafml"
+loaderVersion="[2,)"
+license="GPL-3.0"
+
+[[mods]]
+    modId="musicmc"
+    version="0.1.0"
+    displayName="MusicMC"
+    description='''
+    在 Minecraft 中听网易云音乐。基于 ModernUI 构建的图形界面,
+    支持歌曲搜索、播放列表、歌词显示与本地配置管理。
+    '''
+
+[[dependencies.musicmc]]
+    modId="minecraft"
+    type="required"
+    versionRange="[26.1,26.2)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.musicmc]]
+    modId="neoforge"
+    type="required"
+    versionRange="[26.1.0.1-beta,)"
+    ordering="NONE"
+    side="BOTH"
+
+# ModernUI 为运行期硬依赖(modId 以 MUI jar 内的 neoforge.mods.toml 为准 = "modernui")
+[[dependencies.musicmc]]
+    modId="modernui"
+    type="required"
+    versionRange="[3.13.0.5,)"
+    ordering="AFTER"
+    side="BOTH"
