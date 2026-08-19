@@ -62,40 +62,54 @@ val nativePlatforms: List<String> = (findProperty("nativePlatform") as? String ?
     .let { if (it == "all") allNativePlatforms else listOf(it) }
 val allNativeMode: Boolean = nativePlatforms.size > 1
 
-// all 模式专用:把 native/build/libs 的 6 个 native 平台 jar 与 javacpp-windows-arm64 jar
-// 复制为带 Automatic-Module-Name 的副本(MDG 的 JarJar 任务对"文件型"jarJar 依赖要求显式
-// 模块名,否则抛出 GradleException),输出到 build/allNativeJars,再由 jarJar(files(...)) 嵌套。
+// native 平台 jar 的 jarJar 处理(两种模式统一):
+// MDG 的 JarJar 任务对"文件型"jarJar 依赖要求显式模块名(否则构建期 GradleException);
+// FML 运行时还会对 jarjar 嵌套 jar 做 JPMS 模块名校验(Checks.requireModuleName)。
+// 注意:'native' 是 Java 关键字,按文件名推导或写成 musicmc.native.* 都会导致
+// Invalid module name 启动崩溃(Fabric 无此校验,NeoForge 必炸),故统一用 nativelib 段。
 data class NativeJarBundle(val tag: String, val jarName: String, val moduleName: String)
 
 val allNativeBundles: List<NativeJarBundle> = listOf(
-    NativeJarBundle("linux_x86_64", "musicmc-native-linux-x86_64.jar", "musicmc.native.linux_x86_64"),
-    NativeJarBundle("linux_arm64", "musicmc-native-linux-arm64.jar", "musicmc.native.linux_arm64"),
-    NativeJarBundle("windows_x86_64", "musicmc-native-windows-x86_64.jar", "musicmc.native.windows_x86_64"),
-    NativeJarBundle("windows_arm64", "musicmc-native-windows-arm64.jar", "musicmc.native.windows_arm64"),
-    NativeJarBundle("android_arm64", "musicmc-native-android-arm64.jar", "musicmc.native.android_arm64"),
-    NativeJarBundle("android_x86_64", "musicmc-native-android-x86_64.jar", "musicmc.native.android_x86_64"),
+    NativeJarBundle("linux_x86_64", "musicmc-native-linux-x86_64.jar", "musicmc.nativelib.linux_x86_64"),
+    NativeJarBundle("linux_arm64", "musicmc-native-linux-arm64.jar", "musicmc.nativelib.linux_arm64"),
+    NativeJarBundle("windows_x86_64", "musicmc-native-windows-x86_64.jar", "musicmc.nativelib.windows_x86_64"),
+    NativeJarBundle("windows_arm64", "musicmc-native-windows-arm64.jar", "musicmc.nativelib.windows_arm64"),
+    NativeJarBundle("android_arm64", "musicmc-native-android-arm64.jar", "musicmc.nativelib.android_arm64"),
+    NativeJarBundle("android_x86_64", "musicmc-native-android-x86_64.jar", "musicmc.nativelib.android_x86_64"),
     NativeJarBundle("javacpp_windows_arm64", "musicmc-javacpp-windows-arm64.jar", "musicmc.javacpp.windows_arm64"),
 )
 
-val preparedNativeJarFiles = if (allNativeMode) {
-    val patchProviders = allNativeBundles.map { bundle ->
-        tasks.register<Jar>("prepareJarjar${bundle.tag}") {
-            group = "build"
-            description = "为 jarJar 准备 ${bundle.jarName}(补 Automatic-Module-Name)"
-            val srcJar = nativeLibsDir.file(bundle.jarName)
-            doFirst {
-                check(srcJar.asFile.isFile) {
-                    "all 模式缺少 $srcJar:native 平台 jar 需由 :native:packageNative 先产出(见 native/README.md)"
-                }
-            }
-            archiveFileName.set(bundle.jarName)
-            destinationDirectory.set(layout.buildDirectory.dir("allNativeJars"))
-            from(zipTree(srcJar)) { exclude("META-INF/MANIFEST.MF") }
-            manifest { attributes["Automatic-Module-Name"] = bundle.moduleName }
-            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+// 单平台模式同样要补合法 Automatic-Module-Name:否则 FML 按文件名推导出
+// musicmc.native.<platform>(含关键字 native)照样启动崩溃。
+val singleNativeBundle: NativeJarBundle? = if (allNativeMode) null else {
+    val p = nativePlatforms.single()
+    NativeJarBundle(
+        tag = p.replace('-', '_'),
+        jarName = "musicmc-native-$p.jar",
+        moduleName = "musicmc.nativelib.${p.replace('-', '_')}",
+    )
+}
+
+fun NativeJarBundle.prepareProvider(): TaskProvider<Jar> = tasks.register<Jar>("prepareJarjar$tag") {
+    group = "build"
+    description = "为 jarJar 准备 $jarName(补 Automatic-Module-Name)"
+    val srcJar = nativeLibsDir.file(jarName)
+    doFirst {
+        check(srcJar.asFile.isFile) {
+            "$jarName 缺失:先执行 :native:packageNative 产出(见 native/README.md)"
         }
     }
-    files(patchProviders.map { it.flatMap { task -> task.archiveFile } })
+    archiveFileName.set(jarName)
+    destinationDirectory.set(layout.buildDirectory.dir("allNativeJars"))
+    from(zipTree(srcJar)) { exclude("META-INF/MANIFEST.MF") }
+    manifest { attributes["Automatic-Module-Name"] = moduleName }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+val preparedNativeJarFiles = if (allNativeMode) {
+    files(allNativeBundles.map { it.prepareProvider().flatMap { task -> task.archiveFile } })
+} else if (singleNativeBundle != null) {
+    files(singleNativeBundle.prepareProvider().flatMap { task -> task.archiveFile })
 } else {
     files()
 }
@@ -215,12 +229,12 @@ dependencies {
         }
     } else {
         // ---- 单平台模式(默认,与历史写法一致)----
+        // native 平台 jar(含 .so)经 prepareJarjar 补 Automatic-Module-Name 后 jarJar 嵌套,
+        // 供 javacpp Loader 从 classpath 资源 org/bytedeco/ffmpeg/<platform>/ 提取。
+        implementation(preparedNativeJarFiles)
+        jarJar(preparedNativeJarFiles)
         implementation("org.bytedeco:javacpp:$javacppVersion:${nativePlatforms.single()}") { isTransitive = false }
         jarJar("org.bytedeco:javacpp:$javacppVersion:${nativePlatforms.single()}")
-        // FFmpeg 原生库:native 模块的平台 jar(含 .so),jarJar 嵌套进最终 mod jar 以便
-        // javacpp Loader 从 classpath 资源 org/bytedeco/ffmpeg/<platform>/ 提取。
-        implementation(project(":native"))
-        jarJar(project(":native"))
     }
 
     // ---- Kotlin stdlib ----
