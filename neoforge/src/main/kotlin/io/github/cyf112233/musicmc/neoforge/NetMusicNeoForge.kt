@@ -4,15 +4,16 @@ import com.mojang.blaze3d.platform.InputConstants
 import icyllis.modernui.mc.MuiModApi
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
-import net.minecraft.commands.Commands
+import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.common.Mod
+import net.neoforged.fml.ModLoadingContext
 import net.neoforged.fml.loading.FMLEnvironment
 import net.neoforged.fml.loading.FMLPaths
 import net.neoforged.neoforge.client.event.ClientTickEvent
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent
 import net.neoforged.neoforge.common.NeoForge
 import org.lwjgl.glfw.GLFW
@@ -26,6 +27,10 @@ import io.github.cyf112233.musicmc.platform.MusicLogger
 import io.github.cyf112233.musicmc.player.PlayerState
 import io.github.cyf112233.musicmc.ui.HudEditorFragment
 import io.github.cyf112233.musicmc.ui.MusicMainFragment
+import io.github.cyf112233.musicmc.ui.UiBackend
+import io.github.cyf112233.musicmc.ui.UiBackendResolver
+import io.github.cyf112233.musicmc.ui.yacl.YaclMusicScreen
+import net.neoforged.fml.ModList
 import java.nio.file.Path
 
 /**
@@ -65,14 +70,11 @@ class NetMusicNeoForge(private val bus: IEventBus) {
                 suppressVanillaMusic()
             }
 
-            // 3) 客户端命令 /netmusic 打开音乐面板:RegisterClientCommandsEvent 挂主总线
-            NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent::class.java) { event ->
-                event.dispatcher.register(
-                    Commands.literal("netmusic").executes {
-                        NetMusic.openScreen()
-                        1
-                    }
-                )
+            // 3) 平台配置菜单入口:NeoForge 自带 Mod 列表界面 → MusicMC → Config
+            //    按钮打开 Cloth Config 设置(不再注册 /netmusic 命令;跨平台配置入口
+            //    统一走平台 mod 菜单:fabric 用 ModMenu,neoforge 用自带界面)
+            ModLoadingContext.get().registerExtensionPoint(IConfigScreenFactory::class.java) {
+                IConfigScreenFactory { _, parent -> io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(parent) }
             }
 
             // 4) 游戏内 HUD(悬浮音乐面板):RegisterGuiLayersEvent 是 IModBusEvent,
@@ -135,9 +137,25 @@ private class NeoForgePlatform : ModPlatform {
     override fun logger(): MusicLogger = Slf4jMusicLogger(logger)
 
     override fun openMusicScreen() {
-        // MuiModApi.get().createScreen(Fragment) 返回 Screen 子类型(MuiScreen 交叉类型),
-        // 签名已通过 javap(ModernUI-NeoForge 26.1.2-3.13.0.5 jar)验证。
-        Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(MusicMainFragment()))
+        // UI 后端按配置 + 已加载 mod 自动选择:
+        // PC:ModernUI > YACL > 原版;Android:YACL > 原版(ModernUI 永不用于 Android)
+        when (
+            UiBackendResolver.resolve(
+                NetMusic.config.uiMode,
+                io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge.isAndroid(),
+                isModernUiLoaded(),
+            )
+        ) {
+            UiBackend.YACL -> Minecraft.getInstance().setScreen(YaclMusicScreen())
+            UiBackend.MODERN_UI -> Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(MusicMainFragment()))
+        }
+    }
+
+    override fun isModernUiLoaded(): Boolean = ModList.get().isLoaded("modernui")
+
+
+    override fun openConfigScreen() {
+        io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(Minecraft.getInstance().screen)
     }
 
     override fun openHudEditor() {
@@ -149,8 +167,18 @@ private class NeoForgePlatform : ModPlatform {
     }
 
     override fun postToUiThread(runnable: Runnable) {
-        // postToUiThread 是 MuiModApi 的静态方法(javap 已核实),须经类名调用
-        MuiModApi.postToUiThread(runnable)
+        // 按实际 UI 后端选择线程:ModernUI 界面用 ModernUI 主线程,
+        // YACL/原版界面用 MC 渲染(主)线程 —— 不依赖 ModernUI(ModernUI 可选)
+        val backend = io.github.cyf112233.musicmc.ui.UiBackendResolver.resolve(
+            io.github.cyf112233.musicmc.NetMusic.config.uiMode,
+            io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge.isAndroid(),
+            isModernUiLoaded(),
+        )
+        if (backend == io.github.cyf112233.musicmc.ui.UiBackend.MODERN_UI) {
+            MuiModApi.postToUiThread(runnable)
+        } else {
+            Minecraft.getInstance().execute(runnable)
+        }
     }
 }
 

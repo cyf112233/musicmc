@@ -141,6 +141,7 @@ repositories {
     maven("https://maven.izzel.io/releases/")
     // net.neoforged:neoforge 等(ModDevGradle 编译/运行期解析)
     maven("https://maven.neoforged.net/releases/")
+    maven("https://maven.shedaniel.me/")
 }
 
 neoForge {
@@ -197,6 +198,8 @@ dependencies {
         exclude(group = "it.unimi.dsi")
     }
 
+    // ---- Cloth Config(配置界面:uiMode 等设置;jarJar 打包进 mod jar,无需用户另装)----
+
     // ---- 运行时库:gson + zxing,jarJar 打包进 mod jar ----
     // KTS 中 jarJar(implementation(...)) 的 implementation(...) 返回可空 Dependency,
     // 与 jarJar(Any) 签名不匹配,故拆分为两行等价写法(效果与 MDG README 的 Groovy 写法一致)。
@@ -241,6 +244,10 @@ dependencies {
     // KGP 已自动将 kotlin-stdlib 挂到 implementation;此处再 jarJar 进 mod jar,
     // 使最终产物自包含(不依赖 KFF 等第三方运行时 mod)。
     jarJar("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
+
+    // LDlib 现代化 UI:common 源码编译期引用其 API(common/libs 本地 jar;
+    // 运行期由用户安装的 LDlib mod 提供,本 mod 不打包)
+    compileOnly(files("../common/libs/yacl-3.9.6-26.1.jar"))
 }
 
 kotlin {

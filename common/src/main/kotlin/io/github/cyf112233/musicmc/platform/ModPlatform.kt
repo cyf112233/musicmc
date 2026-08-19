@@ -18,14 +18,18 @@ interface ModPlatform {
     /** 配置文件目录(如 config/musicmc) */
     fun configDirectory(): Path
     fun logger(): MusicLogger
-    /** 打开音乐界面(loader 负责用 ModernUI 展示 [io.github.cyf112233.musicmc.ui.MusicMainFragment]) */
+    /** 打开音乐界面(按 UiBackendResolver 分派 ModernUI / YACL) */
     fun openMusicScreen()
+    /** 打开配置界面(loader 负责用 Cloth Config 展示;uiMode 等设置入口) */
+    fun openConfigScreen()
     /** 打开 HUD 编辑器(loader 负责用 ModernUI 展示 [io.github.cyf112233.musicmc.ui.HudEditorFragment]) */
     fun openHudEditor()
     /** 关闭当前打开的屏幕(回到游戏;HUD 编辑器"完成"用) */
     fun closeScreen()
     /** 回 UI 线程执行(ModernUI 主线程) */
     fun postToUiThread(runnable: Runnable)
+    /** ModernUI 模组是否加载(loader 侧查 mod 列表;openMusicScreen 分派用) */
+    fun isModernUiLoaded(): Boolean
 }
 
 object PlatformHolder {

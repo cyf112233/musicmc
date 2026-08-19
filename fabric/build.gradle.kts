@@ -87,6 +87,7 @@ repositories {
     // ModernUI(ModernUI-Fabric / ModernUI-Markflow 发布于此;
     // modernui-core >= 3.13.0 改由 Maven Central 提供)
     maven("https://maven.izzel.io/releases/")
+    maven("https://maven.shedaniel.me/")
     // fabric-loader / fabric-api / fabric-language-kotlin 等 Fabric 构件
     maven("https://maven.fabricmc.net/")
     // Forge Config API Port(Fuzss 将 maven 托管于 GitHub raw 路径)
@@ -159,6 +160,12 @@ dependencies {
         implementation(project(":native"))
         include(project(":native"))
     }
+
+    // LDlib 现代化 UI:common 源码编译期引用其 API(common/libs 本地 jar;
+    // LDlib 无 Fabric 版,运行期 fabric 永不使用 LDLib UI,仅编译期需要类)
+    compileOnly(files("../common/libs/yacl-3.9.6-26.1.jar"))
+    // ModMenu 配置菜单入口(fabric 侧;运行期由用户安装 ModMenu,本 mod 不打包)
+    compileOnly(files("../common/libs/modmenu-18.0.0.jar"))
 }
 
 // 共享 common 模块的源码(common 的源码与 Kotlin/Java 插件由 common 模块代理提供,

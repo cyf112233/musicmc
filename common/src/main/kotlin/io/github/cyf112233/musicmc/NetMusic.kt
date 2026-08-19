@@ -37,13 +37,22 @@ object NetMusic {
         // windows-arm64:javacpp Loader 无平台映射(loader/windows-arm64 分支缺失),无法自动
         // 解包/加载。这里(PlatformHolder 注入后、config 加载前 —— 任何 bytedeco 类静态初始化
         // 之前的唯一时机)手动解包 + System.load 桥接(内部最先置 loadlibraries=false 禁自动加载);
-        // 非 windows-arm64 平台此调用是纯空操作,不影响 Loader 正常路径。
+        // Android:这里把 javacpp cachedir 指向 app 私有可执行区并钉死 platform,再触发
+        // Loader.load(avutil) 自动加载(手动 System.load 有 classloader 隔离问题,见
+        // NativeLibBridge 类注释);其余平台此调用是纯空操作,不影响 Loader 正常路径。
         NativeLibBridge.preloadIfNeeded(platform.configDirectory())
         config = ModConfig.load(platform.configDirectory())
         // FFmpeg 原生平台强制覆盖(Pojav 等场景;javacpp Loader 平台为 static final,
         // 必须在任何 FFmpeg/Javacpp 加载前设置,此处是播放器创建前的唯一时机)
         if (!config.nativePlatformOverride.isNullOrBlank()) {
             System.setProperty("org.bytedeco.javacpp.platform", config.nativePlatformOverride.trim())
+        } else {
+            // Android(FCL 等标准 OpenJDK 容器):javacpp 的 isAndroid() 依赖 ART 特征检测不到,
+            // platform 会误判为 linux-arm64 → Loader 找不到 android-arm64 资源。这里按系统
+            // 特征显式钉死(与 NativeLibBridge 手动加载的平台一致,兜底直接走 Loader 的调用)。
+            NativeLibBridge.androidPlatform()?.let {
+                System.setProperty("org.bytedeco.javacpp.platform", it)
+            }
         }
         // 恢复持久化的 B 站登录态(空串即未登录)
         BiliHttp.setCookie(config.biliCookie)
@@ -99,7 +108,23 @@ object NetMusic {
         player.updateConfig(config)
     }
 
-    fun openScreen() = PlatformHolder.require().openMusicScreen()
+    /**
+     * 打开音乐界面。按 uiMode 分流:
+     * MODERN_UI → ModernUI 界面;VANILLA → 原版 MC 回退界面
+     * (Android/FCL 上 ModernUI 文字渲染依赖 Java2D 不可用,回退界面走位图字体)。
+     */
+    fun openScreen() {
+        // UI 后端统一由 openMusicScreen 按 UiBackendResolver 分派:
+        // ModernUI(装了且非 Android)/ YACL(Android 或未装 ModernUI)/ 原版。
+        // uiMode 显式 VANILLA 时 Resolver 也返回原版,行为与旧分流一致;
+        // 旧实现在此处按 uiMode 分流会绕过 YACL 分派(配置残留 VANILLA 时永远走原版)。
+        PlatformHolder.require().openMusicScreen()
+    }
+
+    /** 打开配置界面(Cloth Config;uiMode 等设置入口) */
+    fun openConfigScreen() {
+        PlatformHolder.require().openConfigScreen()
+    }
 
     val logger get() = PlatformHolder.require().logger()
 

@@ -14,8 +14,6 @@ import io.github.cyf112233.musicmc.client.ChatLyricSender
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.MusicHudRenderer
 import net.fabricmc.api.ClientModInitializer
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
@@ -62,16 +60,7 @@ class NetMusicFabricClient : ClientModInitializer {
             MusicHudRenderer.onFrame(GuiGraphicsHudGui(graphics))
         }
 
-        ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
-            // 26.1 客户端命令:用 fabric API 的 ClientCommands.literal(泛型匹配 FabricClientCommandSource),
-            // 而非 vanilla Commands.literal(泛型为 CommandSourceStack,类型不匹配)
-            dispatcher.register(
-                ClientCommands.literal("netmusic").executes {
-                    NetMusic.openScreen()
-                    1
-                },
-            )
-        }
+        // 配置入口不再注册 /netmusic 命令:统一走 ModMenu(Mods 列表 → MusicMC → Config)
     }
 
     /**

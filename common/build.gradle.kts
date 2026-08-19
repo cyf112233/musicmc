@@ -32,6 +32,13 @@ dependencies {
     compileOnly("net.minecraft:minecraft-merged-deobf:${property("minecraft_version")}")
     // MC 运行时依赖(版本取自 MC 26.1.2 piston-meta libraries:org.joml:joml:1.10.8)
     compileOnly("org.joml:joml:1.10.8")
+    // LWJGL OpenAL(Android 音频输出 OpenAlOutput 用;运行期由 MC 提供,这里仅编译期引用。
+    // API 在 3.3.x/3.4.x 稳定一致,版本与 MC 运行期实际值无强绑定)
+    compileOnly("org.lwjgl:lwjgl:3.4.2")
+    compileOnly("org.lwjgl:lwjgl-openal:3.4.2")
+    // YACL 现代化 UI(Android / 无 ModernUI 时的第二 UI 后端;双平台 fabric+neoforge)。
+    // 编译用 fabric 构件(gui 核心类双平台一致;运行期由用户安装对应平台 YACL mod 提供)
+    compileOnly(files("libs/yacl-3.9.6-26.1.jar"))
 
     // 运行期依赖
     implementation("com.google.code.gson:gson:${property("gson_version")}")

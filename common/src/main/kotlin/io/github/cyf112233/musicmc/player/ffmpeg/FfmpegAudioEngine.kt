@@ -5,15 +5,14 @@ import io.github.cyf112233.musicmc.player.AudioCache
 import io.github.cyf112233.musicmc.player.AudioEngine
 import io.github.cyf112233.musicmc.player.PcmBatcher
 import io.github.cyf112233.musicmc.player.StreamOptions
+import io.github.cyf112233.musicmc.player.audio.AudioOutput
+import io.github.cyf112233.musicmc.player.audio.AAudioOutput
+import io.github.cyf112233.musicmc.player.audio.SourceDataLineOutput
 import java.io.IOException
-import javax.sound.sampled.AudioFormat
-import javax.sound.sampled.AudioSystem
-import javax.sound.sampled.FloatControl
-import javax.sound.sampled.SourceDataLine
 
 /**
  * FFmpeg 播放引擎(唯一播放引擎):[FfmpegDecoder](avformat 解封装 + avcodec 解码 +
- * swr 转 s16)→ 现有 javax.sound 输出管线。
+ * swr 转 s16)→ 输出管线(桌面 javax.sound / Android OpenAL,见 AudioOutput)。
  *
  * 线程/暂停锁/音量/会话守卫/攒批写模式与既有引擎约定一致:
  * - 每次会话一条播放线程(NetMusic-Ffmpeg),sessionId 递增丢弃旧线程过期回调;
@@ -48,7 +47,7 @@ class FfmpegAudioEngine : AudioEngine {
     private var sessionId = 0
 
     private var playbackThread: Thread? = null
-    private var line: SourceDataLine? = null
+    private var line: AudioOutput? = null
 
     /** 当前会话的解码器(playLoop 内创建并独占;仅解码线程 finally close,引擎绝不跨线程 close) */
     @Volatile
@@ -284,7 +283,7 @@ class FfmpegAudioEngine : AudioEngine {
                         if (!lineOpened) {
                             // 首帧定格式后建 line;创建前确认本会话仍有效(与 M4a/Mp3 同一泄漏窗口防御)
                             if (stopped || mySession != sessionId) return
-                            val audioLine = createLine(audio.rate, audio.channels)
+                            val audioLine = createOutput(audio.rate, audio.channels)
                             line = audioLine
                             slot.line = audioLine
                             slot.batcher = PcmBatcher(audioLine)
@@ -431,42 +430,21 @@ class FfmpegAudioEngine : AudioEngine {
         }, "NetMusic-Prefetch").apply { isDaemon = true; start() }
     }
 
-    /** 创建输出 SourceDataLine(格式取解码帧采样率/声道,16bit 小端 PCM 交织) */
-    private fun createLine(rate: Int, channels: Int): SourceDataLine {
+    /** 创建输出:桌面 javax.sound / Android AAudio(API 26+,独立于 OpenSL/OpenAL,不冲突 MC SoundEngine) */
+    private fun createOutput(rate: Int, channels: Int): AudioOutput {
         if (rate <= 0 || channels <= 0) throw java.io.IOException("FFmpeg 解码输出格式无效")
-        val format = AudioFormat(rate.toFloat(), 16, channels, true, false)
-        val audioLine = AudioSystem.getSourceDataLine(format)
-        audioLine.open(format, 131072) // 128KB line 缓冲,减少 write 阻塞与碎片化
-        audioLine.start()
-        return audioLine
+        return if (NativeLibBridge.isAndroid()) AAudioOutput(rate, channels) else SourceDataLineOutput(rate, channels)
     }
 
-    /** 音量:优先 MASTER_GAIN,其次 VOLUME;不支持则忽略(同 Mp3/Flac/M4a) */
+    /** 音量:桌面走 MASTER_GAIN/VOLUME,javax.sound;Android 走 AAudio setVolume */
     private fun applyVolume(v: Float) {
-        val out = line ?: return
-        try {
-            val gain: FloatControl? = try {
-                out.getControl(FloatControl.Type.MASTER_GAIN) as? FloatControl
-            } catch (_: IllegalArgumentException) {
-                null
-            } ?: try {
-                out.getControl(FloatControl.Type.VOLUME) as? FloatControl
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-            if (gain != null) {
-                val db = if (v < 0.001f) -80.0 else 20.0 * Math.log10(v.toDouble())
-                gain.value = db.toFloat().coerceIn(gain.minimum, gain.maximum)
-            }
-        } catch (_: Exception) {
-            // 不支持音量控制则忽略
-        }
+        line?.setVolume(v)
     }
 }
 
 /** 本会话打开的 line/解码器引用(供 playLoop 写输出与 finally 清理) */
 private class FfmpegLineSlot {
-    var line: SourceDataLine? = null
+    var line: AudioOutput? = null
     /** 攒批写入缓冲(line 创建时一并创建,随会话清理) */
     var batcher: PcmBatcher? = null
 }

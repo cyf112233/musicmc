@@ -6,32 +6,35 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 /**
- * windows-arm64 原生库手动桥接。
+ * 特殊平台原生库桥接:windows-arm64 手动加载 + Android 走 javacpp Loader。
  *
- * 背景:bytedeco 1.5.12 官方平台矩阵**没有 windows-arm64** —— javacpp Loader 的
- * "org/bytedeco/ffmpeg/windows-arm64/" 资源路径无对应加载分支(platform 无映射)。
- * 本 mod 的 windows-arm64 原生产物虽是真实 ARM64 PE 且按 Loader 资源布局打包,
- * 但 Loader 无法自动解包/加载(Loader.java 对未映射平台会抛或短路)。
- *
- * 机制(仅 windows-arm64 生效,其他平台完全不干预,仍走 javacpp Loader 自动加载):
+ * windows-arm64:bytedeco 1.5.12 官方平台矩阵**没有 windows-arm64**,Loader 无平台映射,
+ * 无法自动加载。机制:
  *   1. **最先**置 `org.bytedeco.javacpp.loadlibraries=false`,禁用 Loader 的自动加载
  *      (必须在任何 bytedeco 类的静态初始化前 —— 否则其静态块里已触发 Loader 尝试);
  *   2. 从类路径(classloader)按 javacpp 资源布局 `org/bytedeco/<lib>/windows-arm64/`
  *      用 getResourceAsStream 提取全部 dll 到 `configDir/musicmc-native/windows-arm64/`
- *      (写 .stamp 标记 "v1",避免重复解包);
+ *      (写 .stamp 标记,避免重复解包);
  *   3. 按**依赖序**逐个 `System.load(绝对路径)` 手动加载:
  *        libc++/libunwind(LLVM 运行库)→ libav*.dll(FFmpeg 本体)→ libjnijavacpp.dll
  *        (javacpp 核心,提供 JNI 蹦床)→ libjniav*.dll(绑定库,依赖前两者);
  *   4. 全部成功 → [manualLoaded]=true,[FfmpegDecoder.nativeAvailable] 据此放行;
- *      任一失败(解包缺资源 / UnsatisfiedLinkError 等)→ 记日志且保持 false,
- *      上层按"平台不支持播放"处理。
+ *      任一失败(解包缺资源 / UnsatisfiedLinkError 等)→ 记日志且保持 false。
+ *
+ * Android:不再手动加载。手动 System.load 的库注册在**调用者类的 classloader**
+ * (musicmc 的 mod 类加载器),而 avutil 等绑定类由 FML Plugins 类加载器加载,
+ * JVM 的 native 符号查找按 classloader 隔离 → 手动加载即使 8 个库全成功,
+ * avutil.<clinit> 仍报 UnsatisfiedLinkError。解法:把 javacpp Loader 的解包缓存目录
+ * (org.bytedeco.javacpp.cachedir)指向 app 私有可执行区,并主动触发 Loader.load(avutil),
+ * 由 Loader 自身完成"找资源(musicmc-native-<platform>.jar)→ 解包 → System.load",
+ * 库注册到 Loader 所在的 FML Plugins 类加载器,与 avutil 同加载器,native 符号可解析。
  *
  * 日志经 NetMusic.logger(NetMusic.init 时 platform 已注入,try/catch 兜底防时序问题)。
  */
 object NativeLibBridge {
 
-    /** 解包标记:内容变更时递增,触发重新解包 */
-    private const val STAMP = "v1"
+    /** 解包标记:内容/目录变更时递增,触发重新解包(仅 windows-arm64 手动桥接使用) */
+    private const val STAMP = "v3"
 
     /**
      * 资源清单(**顺序即 System.load 依赖序**):
@@ -79,53 +82,192 @@ object NativeLibBridge {
     }
 
     /**
-     * windows-arm64 原生库预加载(幂等;NetMusic.init 中 PlatformHolder.set 之后调用一次)。
+     * 当前 JVM 是否运行在 Android 系统。
+     * 判定依据:ANDROID_ROOT 环境变量(Android 系统层必有,值为 /system)+ os.name 为 Linux。
+     * 不能用 javacpp 的 isAndroid() —— 它依赖 ART/Dalvik 特征,FCL 等容器用的是标准 OpenJDK,
+     * 检测不到 → platform 误判为 linux-arm64 → Loader 找 android-arm64 资源失败。
+     */
+    fun isAndroid(): Boolean {
+        if (System.getenv("ANDROID_ROOT").isNullOrEmpty()) return false
+        val os = System.getProperty("os.name").lowercase()
+        return os.contains("linux")
+    }
+
+    /**
+     * Android 目标平台名(android-arm64 / android-x86_64);非 Android 或架构未知返回 null。
+     */
+    fun androidPlatform(): String? {
+        if (!isAndroid()) return null
+        return when (System.getProperty("os.arch").lowercase()) {
+            "aarch64", "arm64" -> "android-arm64"
+            "x86_64", "amd64" -> "android-x86_64"
+            else -> null
+        }
+    }
+
+    /**
+     * 特殊平台原生库预加载(幂等;NetMusic.init 中 PlatformHolder.set 之后调用一次)。
      *
-     * 非 windows-arm64 直接返回(不干预 Loader 正常路径);windows-arm64 执行
-     * "禁自动加载 → 解包 → 按依赖序 System.load" 全流程,结果落 [manualLoaded]。
+     * 覆盖两类 javacpp Loader 无法自动加载的平台:
+     *  - windows-arm64:bytedeco 1.5.12 官方平台矩阵没有它,Loader 无平台映射 →
+     *    手动桥接(禁自动加载 → 解包 → 按依赖序 System.load),结果落 [manualLoaded];
+     *  - android-*:FCL 等 Android 容器跑标准 OpenJDK,javacpp 的 isAndroid() 检测不到
+     *    (依赖 ART 特征),platform 误判为 linux-arm64。**修复:不手动加载**,把 Loader
+     *    的解包缓存目录指向 app 私有可执行区并主动触发 Loader.load(avutil),由 Loader
+     *    自身加载库 —— 手动 System.load 注册在 mod 类加载器,avutil 由 FML Plugins
+     *    类加载器加载,native 符号查找按 classloader 隔离,手动加载必然 UnsatisfiedLinkError。
+     *
+     * 其他平台直接返回(不干预 Loader 正常路径)。
      */
     fun preloadIfNeeded(baseDir: Path) {
         if (preloaded) return
         synchronized(this) {
             if (preloaded) return
             preloaded = true
-            if (!isWindowsArm64()) return
 
-            try {
-                // 必须最先执行:禁用 javacpp Loader 自动加载。Loader.java 在此属性为 true
-                // 时短路,不再尝试从 classpath 找平台映射资源 —— 否则它会在未映射平台
-                // 上抛异常(或加载失败),且此属性必须在任何 bytedeco 类静态初始化之前设置。
-                System.setProperty("org.bytedeco.javacpp.loadlibraries", "false")
+            val isWinArm = isWindowsArm64()
+            val androidP = androidPlatform()
+            if (!isWinArm && androidP == null) return
 
-                val extractDir = baseDir.resolve("musicmc-native").resolve("windows-arm64")
-                Files.createDirectories(extractDir)
-
-                // 已解包过(.stamp 命中)则跳过拷贝;未命中/缺 stamp 重新全量解包
-                val stampFile = extractDir.resolve(".stamp")
-                val extracted = Files.exists(stampFile) && runCatching { Files.readString(stampFile) == STAMP }.getOrDefault(false)
-                if (!extracted) {
-                    for (res in RESOURCES) {
-                        val out = extractDir.resolve(res.substringAfterLast('/'))
-                        val input = openResource(res) ?: run {
-                            warn("缺少 windows-arm64 原生库资源: $res")
-                            return
-                        }
-                        input.use { Files.copy(it, out, StandardCopyOption.REPLACE_EXISTING) }
-                    }
-                    Files.writeString(stampFile, STAMP)
-                }
-
-                // 按依赖序手动加载(重复 load 已加载库为无害空操作,幂等)
-                for (res in RESOURCES) {
-                    System.load(extractDir.resolve(res.substringAfterLast('/')).toString())
-                }
-                manualLoaded = true
-                info("windows-arm64 原生库手动加载成功(${RESOURCES.size} 个 dll)")
-            } catch (t: Throwable) {
-                // UnsatisfiedLinkError / IOException / 权限等:一律视为不可用,
-                // 上层(FfmpegDecoder.nativeAvailable)报"平台不支持播放"
-                warn("windows-arm64 原生库手动加载失败: ${t.javaClass.simpleName}: ${t.message}")
+            if (isWinArm) {
+                preloadWindowsArm64(baseDir)
+            } else {
+                prepareAndroidLoader(androidP!!, baseDir)
             }
+        }
+    }
+
+    /**
+     * windows-arm64 手动桥接(该平台 bytedeco 1.5.12 无映射,Loader 无法自动加载):
+     * 禁自动加载 → 解包 → 按依赖序 System.load,结果落 [manualLoaded]。
+     */
+    private fun preloadWindowsArm64(baseDir: Path) {
+        val subDir = "windows-arm64"
+        try {
+            // 必须最先执行:禁用 javacpp Loader 自动加载(在任何 bytedeco 类静态初始化前)
+            System.setProperty("org.bytedeco.javacpp.loadlibraries", "false")
+
+            val extractDir = baseDir.resolve("musicmc-native").resolve(subDir)
+            Files.createDirectories(extractDir)
+            info("$subDir 原生库解包目录: $extractDir")
+
+            // 已解包过(.stamp 命中)则跳过拷贝;未命中/缺 stamp 重新全量解包
+            val stampFile = extractDir.resolve(".stamp")
+            val extracted = Files.exists(stampFile) && runCatching { Files.readString(stampFile) == STAMP }.getOrDefault(false)
+            if (!extracted) {
+                for (res in RESOURCES) {
+                    val out = extractDir.resolve(res.substringAfterLast('/'))
+                    val input = openResource(res) ?: run {
+                        warn("缺少 $subDir 原生库资源: $res")
+                        return
+                    }
+                    input.use { Files.copy(it, out, StandardCopyOption.REPLACE_EXISTING) }
+                }
+                Files.writeString(stampFile, STAMP)
+            }
+
+            // 按依赖序手动加载(重复 load 已加载库为无害空操作,幂等)
+            for (res in RESOURCES) {
+                System.load(extractDir.resolve(res.substringAfterLast('/')).toString())
+            }
+            manualLoaded = true
+            info("$subDir 原生库手动加载成功(${RESOURCES.size} 个库)")
+        } catch (t: Throwable) {
+            // UnsatisfiedLinkError / IOException / 权限等:一律视为不可用,
+            // 上层(FfmpegDecoder.nativeAvailable)报"平台不支持播放"
+            warn("$subDir 原生库手动加载失败: ${t.javaClass.simpleName}: ${t.message}")
+        }
+    }
+
+    /**
+     * Android:不手动加载,让 javacpp Loader 走自动加载路径。
+     *
+     * 关键认知(第 4 轮修复):手动 System.load 的库注册在**调用者类的 classloader**
+     * (musicmc 的 mod 类加载器),而 avutil 等绑定类由 FML Plugins 类加载器加载,
+     * JVM 的 native 符号查找按 classloader 隔离 —— 手动加载虽成功(8 个库全过),
+     * avutil.<clinit> 仍报 UnsatisfiedLinkError。解法:让 Loader 自己加载
+     * (System.load 由 Loader 类发起,注册到 FML Plugins,与 avutil 同加载器)。
+     *
+     * 前提两件事,本方法负责其一,其二由构建保证:
+     *  - 解包缓存目录指向 app 私有可执行区(共享存储 noexec,dlopen 被拒);
+     *  - 库资源按 javacpp 布局存在于 musicmc-native-<platform>.jar
+     *    (PC 实证 Loader 会从该 jar 找到、解包并加载;preload 列表不含
+     *    libjnijavacpp.so —— 1.5.12 的 libjni*.so 已静态包含 javacpp 运行时,
+     *    且 -static-libstdc++ 静态链接 libc++,不触碰 FCL JVM 已占用的 libc++_shared.so)。
+     */
+    private fun prepareAndroidLoader(platform: String, baseDir: Path) {
+        try {
+            // 解包根目录必须是 app 私有可执行区。
+            // FCL 把 MC 版本目录放在共享存储(/storage/emulated/0/),Android linker
+            // 对共享存储执行 noexec —— 从那里 dlopen 一律报 "is not accessible for
+            // the namespace clns-6"。app 数据目录(/data/user/0/...)可执行:证据是
+            // FCL 的 libjvm.so 就在 app_runtime 私有目录,OpenAL/LWJGL 原生库也从
+            // 私有目录加载成功。候选根目录:java.io.tmpdir → user.home → user.dir
+            // (均为 app 私有区),全部不可用才回退 baseDir。
+            val extractRoot = {
+                val candidates = listOfNotNull(
+                    System.getProperty("java.io.tmpdir"),
+                    System.getProperty("user.home"),
+                    System.getProperty("user.dir"),
+                )
+                candidates.mapNotNull { c ->
+                    runCatching {
+                        val p = Path.of(c).toAbsolutePath()
+                        if (Files.isDirectory(p) && Files.isWritable(p)) p else null
+                    }.getOrNull()
+                }.firstOrNull() ?: baseDir
+            }.invoke()
+
+            // javacpp Loader 的解包缓存目录(Loader.getCacheDir 静态缓存,必须在本进程
+            // 首次触碰 bytedeco 类之前设置):Loader 默认候选 user.home/.javacpp/cache,
+            // Android 上 user.home 可能落在共享存储(noexec),Java 层能读但 dlopen 被拒。
+            val cacheDir = extractRoot.resolve("musicmc-native").resolve("javacpp-cache")
+            Files.createDirectories(cacheDir)
+            System.setProperty("org.bytedeco.javacpp.cachedir", cacheDir.toString())
+            // platform 属性同样必须在首次触碰 bytedeco 类之前钉死(javacpp Loader 静态缓存)。
+            // NetMusic.init 里本方法先于 config 加载/override 设置执行,这里先行钉死 android 平台;
+            // 之后若用户显式配置了 nativePlatformOverride,NetMusic.init 会再覆盖(已初始化完成的
+            // avutil 类与已加载库不受影响,播放走缓存)。
+            System.setProperty("org.bytedeco.javacpp.platform", platform)
+            info("$platform javacpp cachedir: $cacheDir")
+
+            // AAudio 音频输出库(独立资源路径 musicmc/audio/<platform>/,不混入 javacpp
+            // 布局)。System.load 注册到本类(musicmc mod)加载器,与 AAudioPlayer 同加载器,
+            // JNI 方法可解析 —— mod 内部库,无跨加载器问题。
+            val audioRes = "musicmc/audio/$platform/libmusicmc_audio.so"
+            val audioFile = cacheDir.resolve("libmusicmc_audio.so")
+            // 总是覆盖解包(历史坑:旧 OpenSL 版同名校验文件曾留在缓存,exists 检查会跳过
+            // 更新导致加载旧库 → AAudioPlayer.nativeInit UnsatisfiedLinkError)
+            runCatching {
+                val input = openResource(audioRes)
+                if (input != null) {
+                    input.use { Files.copy(it, audioFile, StandardCopyOption.REPLACE_EXISTING) }
+                }
+            }
+            if (Files.exists(audioFile)) {
+                System.load(audioFile.toString())
+                info("$platform 音频输出库已加载(AAudio)")
+            } else {
+                warn("缺少 $platform 音频输出库资源: $audioRes(Android 将无法出声)")
+            }
+
+            // 主动触发 avutil <clinit>(→ Loader.load()):让库在 mod 加载阶段就绪,
+            // 播放时零延迟。loader 探测:本类 loader 与线程上下文 loader 中任一个能
+            // 加载到 avutil(经 parent 链委托到 FML Plugins)即可。失败仅告警——
+            // 播放时 FfmpegDecoder.nativeAvailable 会再触发并给出明确结果。
+            var done = false
+            for (l in listOfNotNull(NativeLibBridge::class.java.classLoader, Thread.currentThread().contextClassLoader)) {
+                try {
+                    Class.forName("org.bytedeco.ffmpeg.global.avutil", true, l)
+                    done = true
+                    break
+                } catch (_: Throwable) {
+                }
+            }
+            if (done) info("$platform 原生库已由 javacpp Loader 加载")
+            else warn("$platform 未能触发 javacpp Loader 加载(avutil 类不可达),播放时将再尝试")
+        } catch (t: Throwable) {
+            warn("$platform javacpp Loader 准备失败: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 

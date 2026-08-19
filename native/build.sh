@@ -129,7 +129,15 @@ case "$PLATFORM" in
             COMPILER="$NDK_BIN/x86_64-linux-android21-clang++"
             ABI_DIR=x86_64-linux-android
         fi
-        DEF_FLAGS="-O3"
+        # -static-libstdc++: JNI 库静态链接 libc++,不再依赖 libc++_shared.so。
+        # FCL 的 JVM(libjvm.so)已 dlopen 自己的 libc++_shared.so,Android linker
+        # namespace 隔离(clns-N)拒绝再加载同名库,必须让 libjni*.so 自带 C++ 运行库。
+        # -llog: javacpp 运行时在 Android 上用 __android_log_vprint 打日志(liblog.so 提供),
+        # 不链接则 dlopen 时报 "cannot locate symbol __android_log_vprint"。
+        # 注意: 这些 -l 标志经 -Dplatform.compiler.default 同时进编译/链接命令行,
+        # 编译(-c)阶段会被忽略,链接阶段生效;liblog.so 是 Android 公开系统库,
+        # NDK clang 内建 sysroot 可直接 -llog 解析,运行时任何 namespace 均可访问。
+        DEF_FLAGS="-O3 -static-libstdc++ -llog"
         EXTRA_INC="$NDK_SYSROOT/usr/include:$NDK_SYSROOT/usr/include/$ABI_DIR"
         EXTRA_LINKPATH=()
         EXTRA_CC=()
@@ -149,6 +157,32 @@ BUILDER_ARGS+=(org.bytedeco.ffmpeg.global.avcodec org.bytedeco.ffmpeg.global.avf
 
 java -cp "$JAVACPP_JAR:$FFMPEG_JAR" org.bytedeco.javacpp.tools.Builder "${BUILDER_ARGS[@]}"
 
+
+
+# ------------------------------------------------------------
+#  stage 3/2 (android only): AAudio 音频输出库
+#  AAudio(API 26+)独立于 OpenSL/OpenAL,无 Engine/设备共享冲突 —— 是 Android 上
+#  唯一确定不崩溃的播放通道(OpenSL 直调与 MC OpenAL 的 OpenSL Engine 冲突 SIGSEGV;
+#  自建 OpenAL 设备破坏 MC SoundEngine)。产物 musicmc/audio/<platform>/libmusicmc_audio.so
+#  (独立资源路径;Java 侧由 NativeLibBridge 解包 + System.load)。
+# ------------------------------------------------------------
+if [[ "$PLATFORM" == android-* ]]; then
+    AUDIO_DIR="$OUT/musicmc/audio/$PLATFORM"
+    mkdir -p "$AUDIO_DIR"
+    if [[ -n "${ABI_DIR:-}" ]]; then
+        # AAudio 需 API 26+;用 android26 clang 变体(内置对应 sysroot/宏)。
+        "$NDK_BIN/$ABI_DIR"26-clang -shared -fPIC -O2 \
+            -I"$NDK_SYSROOT/usr/include" -I"$NDK_SYSROOT/usr/include/$ABI_DIR" \
+            "$ROOT/audio/aaudio_player.c" -o "$AUDIO_DIR/libmusicmc_audio.so" \
+            -laaudio -llog -lm
+        echo "  -- audio lib: $AUDIO_DIR/libmusicmc_audio.so"
+        ls -la "$AUDIO_DIR/"
+    else
+        echo "ERROR: ABI_DIR undefined (android 分支 case 未执行?)" >&2
+        exit 1
+    fi
+fi
+
 echo "============================================================"
 echo "  build done. artifacts:"
 # -copylibs 会额外拷贝预设变体 preload 的系统库(libva/libdrm/libasound/vchiq/mmal/...)——
@@ -157,11 +191,14 @@ rm -f "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libva* "$OUT"/org/bytedeco/ffmpeg/$PL
       "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libasound* "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libvchiq* \
       "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libvcos* "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libvcsm* \
       "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libbcm_host* "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/libmmal* 2>/dev/null || true
+# android:libjni*.so 已用 -static-libstdc++ 静态链接 libc++(见 android 分支 DEF_FLAGS),
+# 不再依赖 libc++_shared.so(FCL 的 JVM 已 dlopen 自己的 libc++_shared.so,Android
+# linker namespace 隔离会拒绝重复加载同名库)。下述校验段将确认无 libc++_shared 依赖。
 # 校验:我们的 .so 只应依赖标准系统库或本输出目录内的兄弟库
 BAD=0
 OUT_LIBS=""; for f in "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/lib*.so*; do OUT_LIBS="$OUT_LIBS $(basename "$f")"; done
 for f in "$OUT"/org/bytedeco/ffmpeg/$PLATFORM/lib*.so*; do
-    deps=$(objdump -p "$f" 2>/dev/null | grep NEEDED | awk '{print $2}' | grep -vE '^(libc|libm|libpthread|libdl|libstdc|libgcc|linux-vdso|ld-linux)' || true)
+    deps=$(objdump -p "$f" 2>/dev/null | grep NEEDED | awk '{print $2}' | grep -vE '^(libc|libm|libpthread|libdl|libstdc|libgcc|linux-vdso|ld-linux|liblog)' || true)
     for d in $deps; do
         case " $OUT_LIBS " in
             *" $d "*) continue ;;   # 自家兄弟库,放行

@@ -4,6 +4,8 @@ pluginManagement {
         mavenCentral()
         maven("https://maven.fabricmc.net")
         maven("https://maven.neoforged.net/releases")
+        // Cloth Config(配置界面 me.shedaniel.cloth)
+        maven("https://maven.shedaniel.me/")
     }
 }
 

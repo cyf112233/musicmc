@@ -40,6 +40,13 @@ data class ModConfig(
      * 取值如 "android-arm64" / "android-x86_64" / "linux-x86_64"(见 native/STATUS.md 平台矩阵)。
      */
     val nativePlatformOverride: String = "",
+    /**
+     * UI 方案:AUTO(默认,装了哪个用哪个 —— PC:ModernUI > YACL > 原版;
+     * Android:YACL > 原版,ModernUI 永不用于 Android)/ MODERN_UI / YACL / VANILLA。
+     * Android(FCL)上 ModernUI 3.13 的文字渲染依赖 Java2D(java.awt),而 NDK OpenJDK
+     * 的 Java2D 字形光栅化为空转 → 界面文字全空白;YACL/原版 MC 界面走位图字体,不受影响。
+     */
+    val uiMode: String = "AUTO",
 ) {
     companion object {
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()

@@ -1,21 +1,25 @@
 # =============================================================================
-# native 六平台矩阵并行编译 + 全平台 mod 打包
-#   native  job:linux-x86_64 / linux-arm64 / windows-x86_64 / windows-arm64 /
-#               android-arm64 / android-x86_64 六路并行:cppbuild(FFmpeg 7.1.5)+
-#               javacpp Builder(bash native/build.sh)→ musicmc-native-<platform>.jar
-#   assemble-all job:汇总 6 个平台 jar + 1 个本地 javacpp-windows-arm64 jar →
-#               ./gradlew -PnativePlatform=all 打出全平台 mod jar(fabric/neoforge)
-# 细节与产物说明见 native/README.md「构建命令 / GitHub Actions CI」。
+# 单工作流:从零编译 6 平台原生库(FFmpeg + javacpp JNI + AAudio)→ 全平台 mod jar
+# → 自动创建 GitHub Release 并上传产物(push)。
+#
+#   native   job:6 平台并行,完整 cppbuild + javacpp Builder(bash native/build.sh),
+#              含各平台交叉工具链(linux-arm64 g++ / windows-x86_64 mingw /
+#              windows-arm64 llvm-mingw / android NDK)+ cppbuild 编译缓存。
+#   assemble job:汇总 6 个 native 平台 jar + toolbox 的 javacpp-windows-arm64.jar
+#              → ./gradlew -PnativePlatform=all 打全平台 fabric/neoforge mod jar。
+#   release  job:把 2 个 mod jar 上传为 GitHub Release(push 产物)。
+#
+# 触发:手动(workflow_dispatch)或 push main/master;native/** 变更也会全量重编。
 # =============================================================================
-name: native-build
+name: build
 
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
-    paths:
-      - 'native/**'
-      - '.github/workflows/native-build.yml'
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
 
 jobs:
   native:
@@ -41,7 +45,6 @@ jobs:
           java-version: '25'
 
       # build.sh 默认从 native/toolbox/ 读取两个 bytedeco jar;缺失时从 Maven Central 补
-      # (curl -f:4xx/5xx 即失败,步骤报错)
       - name: Ensure toolbox jars
         run: |
           mkdir -p native/toolbox
@@ -62,9 +65,7 @@ jobs:
         if: matrix.platform == 'windows-x86_64'
         run: sudo apt-get install -y g++-mingw-w64-x86-64
 
-      # windows-arm64:llvm-mingw 交叉工具链(aarch64-w64-mingw32-g++ 等),
-      # 解压于 ~/llvm-mingw,actions/cache 持久化;未命中才下载官方 release。
-      # 产物目录含 libc++.dll/libunwind.dll(见 native/README.md §windows-arm64)。
+      # windows-arm64:llvm-mingw 交叉工具链(aarch64-w64-mingw32-g++ 等)
       - name: Restore llvm-mingw cache
         if: matrix.platform == 'windows-arm64'
         uses: actions/cache@v4
@@ -82,15 +83,11 @@ jobs:
             tar -xJf /tmp/llvm-mingw.tar.xz -C "$HOME/llvm-mingw" --strip-components=1
             rm -f /tmp/llvm-mingw.tar.xz
           fi
-          # 跨步骤环境:build.sh 读 LLVM_MINGW_DIR(windows-arm64 PATH),
-          # 包装器 wrap/aarch64-g++.sh 读 REAL_GPP(均经 $GITHUB_ENV 注入)
           echo "LLVM_MINGW_DIR=$HOME/llvm-mingw" >> "$GITHUB_ENV"
           echo "REAL_GPP=$HOME/llvm-mingw/bin/aarch64-w64-mingw32-g++" >> "$GITHUB_ENV"
           echo "$HOME/llvm-mingw/bin" >> "$GITHUB_PATH"
-          ls "$HOME/llvm-mingw/bin/aarch64-w64-mingw32-g++"
 
-      # android:NDK r27b(官方下载,~2GB 解压),缓存键 android-ndk-r27b;
-      # build.sh/cppbuild.sh 均识别 ANDROID_NDK 环境变量。
+      # android:NDK r27b
       - name: Restore Android NDK cache
         if: startsWith(matrix.platform, 'android-')
         uses: actions/cache@v4
@@ -109,8 +106,7 @@ jobs:
           fi
           echo "ANDROID_NDK=$HOME/android-ndk-r27b" >> "$GITHUB_ENV"
 
-      # ---- cppbuild 缓存(FFmpeg 编译树,命中即跳过阶段 1)----
-      # 键 = 平台 + ffmpeg 版本 + cppbuild.sh 内容 sha256 前 8 位(脚本变更自动失效)
+      # ---- cppbuild 缓存(FFmpeg 编译树,命中即跳过阶段 1;键含脚本 hash 自动失效)----
       - name: Compute cppbuild cache hash
         run: echo "cppbuild_hash=$(sha256sum native/cppbuild/ffmpeg/cppbuild.sh | cut -c1-8)" >> "$GITHUB_ENV"
 
@@ -120,7 +116,7 @@ jobs:
           path: native/cppbuild/ffmpeg/cppbuild/${{ matrix.platform }}
           key: cppbuild-${{ matrix.platform }}-ffmpeg-7.1.5-${{ env.cppbuild_hash }}
 
-      # ---- 两阶段构建(日志入文件,失败时 tail 便于排查)----
+      # ---- 两阶段构建(从零编译:cppbuild FFmpeg + javacpp Builder + AAudio)----
       - name: Build native ${{ matrix.platform }}
         run: |
           mkdir -p native/build
@@ -132,10 +128,7 @@ jobs:
           fi
           tail -n 5 native/build/native-${{ matrix.platform }}.log
 
-      # windows 产物归一化(与 native/README.md「产物整理」一致,本机手工步骤的 CI 等价物):
-      # Builder 输出 .so 后缀的 PE DLL → 按 javacpp Windows 预载名改 libjni*.dll;
-      # ffmpeg dll 从 cppbuild/.../bin/ 复制(preload 名对齐,swresample 勿漏);
-      # arm64 另附 llvm-mingw 的 libc++.dll / libunwind.dll(动态链接 C++ 运行库)。
+      # windows 产物归一化(.so 后缀 PE → .dll;ffmpeg dll 从 cppbuild bin 复制;arm64 附 libc++)
       - name: Normalize Windows DLL layout
         if: startsWith(matrix.platform, 'windows-')
         run: |
@@ -150,7 +143,7 @@ jobs:
           fi
           ls -la "$OUT"
 
-      # 打平台 jar(等价 :native:packageNative:/ from build/native/<platform> JAR 到 libs/)
+      # 打平台 jar(等价 :native:packageNative:from build/native/<platform> JAR 到 libs/)
       - name: Package platform jar
         run: |
           mkdir -p native/build/libs
@@ -165,23 +158,22 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  assemble-all:
-    name: assemble-all (mod jars, 6 platforms)
+  assemble:
+    name: assemble (mod jars, 6 platforms)
     needs: native
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # 下载 native 的 6 个平台 jar 到 native/build/libs(merge-multiple 直接铺平)
       - uses: actions/download-artifact@v4
         with:
           pattern: musicmc-native-*
           merge-multiple: true
           path: native/build/libs
 
-      # all 模式实际需要 7 个文件,第 7 个 musicmc-javacpp-windows-arm64.jar 非 CI 产物
+      # all 模式第 7 个文件 musicmc-javacpp-windows-arm64.jar 非 CI 产物
       # (bytedeco 1.5.12 无 windows-arm64 坐标,libjnijavacpp.dll 无法从公开源重建),
-      # 随仓库 native/toolbox/ 提供,此处复制到 native/build/libs。
+      # 随仓库 native/toolbox/ 提供。
       - name: Ensure javacpp windows-arm64 jar
         run: |
           mkdir -p native/build/libs
@@ -203,9 +195,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # 注:launchermeta.mojang.com 为双栈 DNS(Azure Front Door),Java 25 http client
-      # 默认可能先试 IPv6 而 GitHub runner 无 IPv6 出口 → Network is unreachable;
-      # preferIPv4Stack=true 强制 IPv4 规避(2026-08-19 实测修复)。
+      # launchermeta.mojang.com 双栈 DNS:Java 25 可能先试 IPv6 而 runner 无 IPv6 出口,
+      # preferIPv4Stack=true 强制 IPv4 规避(2026-08-19 实测)。
       - name: Build mod jars (all platforms)
         env:
           JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
@@ -224,3 +215,32 @@ jobs:
           path: neoforge/build/libs/musicmc-neoforge-*.jar
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: release (push mod jars)
+    needs: assemble
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mod-*
+          merge-multiple: true
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build #${{ github.run_number }}
+          body: |
+            自动构建产物(6 平台原生库 + 全平台 mod jar):
+            - `musicmc-fabric-*.jar`
+            - `musicmc-neoforge-*.jar`
+
+            前置:需自行安装 YACL(`yet_another_config_lib_v3`)。
+          files: release/*
+          generate_release_notes: false

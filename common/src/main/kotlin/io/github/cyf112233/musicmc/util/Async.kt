@@ -1,6 +1,5 @@
 package io.github.cyf112233.musicmc.util
 
-import icyllis.modernui.mc.MuiModApi
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -19,9 +18,8 @@ object Async {
         executor.execute(block)
     }
 
-    /** 切回 UI 线程(ModernUI 主线程)执行 */
+    /** 切回 UI 线程(渲染/主线程)执行;经平台抽象转发,不依赖任何具体 UI 模组 */
     fun onUi(block: Runnable) {
-        // postToUiThread 是 MuiModApi 的静态方法(javap 已核实),须经类名调用
-        MuiModApi.postToUiThread(block)
+        io.github.cyf112233.musicmc.platform.PlatformHolder.require().postToUiThread(block)
     }
 }

@@ -21,6 +21,9 @@ interface HudGui {
     /** 纯色填充矩形(x1,y1 左上,x2,y2 右下,含 x2,y2 所在行列) */
     fun fill(x1: Int, y1: Int, x2: Int, y2: Int, color: Int)
 
+    /** 垂直渐变填充矩形(顶部 [colorTop] → 底部 [colorBottom]) */
+    fun fillGradient(x1: Int, y1: Int, x2: Int, y2: Int, colorTop: Int, colorBottom: Int)
+
     /**
      * 把整张纹理绘制到目标矩形 (x, y, w, h)。
      *

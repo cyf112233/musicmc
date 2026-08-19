@@ -29,6 +29,10 @@ class GuiGraphicsHudGui(private val graphics: GuiGraphicsExtractor) : HudGui {
         graphics.fill(x1, y1, x2, y2, color)
     }
 
+    override fun fillGradient(x1: Int, y1: Int, x2: Int, y2: Int, colorTop: Int, colorBottom: Int) {
+        graphics.fillGradient(x1, y1, x2, y2, colorTop, colorBottom)
+    }
+
     override fun drawTexture(texture: Any, x: Int, y: Int, w: Int, h: Int) {
         // MC 26.1 九参 blit 的四个 int 是「两个对角点 (x0, y0, x1, y1)」,
         // 不是旧版的 (x, y, w, h)!javap 核实:blit(id, x, y, w, h, ...) 的

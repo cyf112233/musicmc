@@ -13,8 +13,9 @@ license="GPL-3.0"
     version="0.1.0"
     displayName="MusicMC"
     description='''
-    在 Minecraft 中听网易云音乐。基于 ModernUI 构建的图形界面,
-    支持歌曲搜索、播放列表、歌词显示与本地配置管理。
+    在 Minecraft 中听哔哩哔哩音乐。支持歌曲搜索、播放列表、歌词显示、
+    HUD 悬浮面板与本地配置管理。UI 自动选择已装的界面模组
+    (ModernUI / LDlib / 原版;Android 强制 LDlib)。
     '''
 
 [[dependencies.musicmc]]
@@ -31,10 +32,19 @@ license="GPL-3.0"
     ordering="NONE"
     side="BOTH"
 
-# ModernUI 为运行期硬依赖(modId 以 MUI jar 内的 neoforge.mods.toml 为准 = "modernui")
+# ModernUI 为可选(装了用 ModernUI 界面;Android 上依赖 Java2D 不可用,自动降级)
 [[dependencies.musicmc]]
     modId="modernui"
-    type="required"
+    type="optional"
     versionRange="[3.13.0.5,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# YACL 为运行期硬依赖(配置界面 + Android/fabric 无 ModernUI 时的现代化界面;
+# modId 以 YACL jar 内的 neoforge.mods.toml 为准)
+[[dependencies.musicmc]]
+    modId="yet_another_config_lib_v3"
+    type="required"
+    versionRange="[3.9.6,)"
     ordering="AFTER"
     side="BOTH"
