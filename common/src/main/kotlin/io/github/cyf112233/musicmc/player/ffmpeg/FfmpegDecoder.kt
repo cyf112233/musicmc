@@ -118,7 +118,7 @@ class FfmpegDecoder {
                 } catch (t: Throwable) {
                     // UnsatisfiedLinkError / NoClassDefFoundError / ExceptionInInitializerError /
                     // IOException(Loader) 等:全部视为"原生库不可用",由调用方提示平台不支持播放
-                    io.github.cyf112233.musicmc.NetMusic.logger.info("FFmpeg 原生库加载失败: ${t.javaClass.simpleName}: ${t.message}")
+                    io.github.cyf112233.musicmc.NetMusic.logger.info("FFmpeg native libs failed to load: ${t.javaClass.simpleName}: ${t.message}")
                     false
                 }
                 return available!!
@@ -233,7 +233,7 @@ class FfmpegDecoder {
      */
     @Synchronized
     fun open(url: String, referer: String?, backupUrls: List<String>, cacheSink: ((Long, ByteArray, Int) -> Unit)? = null) {
-        if (!nativeAvailable()) throw FfmpegUnavailableException("FFmpeg 原生库不可用")
+        if (!nativeAvailable()) throw FfmpegUnavailableException("FFmpeg native libs unavailable")
         synchronized(this) {
             if (closed) throw IOException("decoder closed")
         }
@@ -258,11 +258,11 @@ class FfmpegDecoder {
                 return
             } catch (e: Exception) {
                 last = e
-                io.github.cyf112233.musicmc.NetMusic.logger.warn("FFmpeg 打开失败,尝试备用地址: ${u.take(80)} (${e.javaClass.simpleName}: ${e.message})")
+                io.github.cyf112233.musicmc.NetMusic.logger.warn("FFmpeg open failed, trying backup URL: ${u.take(80)} (${e.javaClass.simpleName}: ${e.message})")
                 closeNative()
             }
         }
-        throw IOException("FFmpeg 音频流打开失败(${last?.message ?: "无可用地址"})")
+        throw IOException("Failed to open FFmpeg audio stream (${last?.message ?: "no available URL"})")
     }
 
     /**
@@ -271,7 +271,7 @@ class FfmpegDecoder {
      */
     @Synchronized
     fun openLocal(path: String) {
-        if (!nativeAvailable()) throw FfmpegUnavailableException("FFmpeg 原生库不可用")
+        if (!nativeAvailable()) throw FfmpegUnavailableException("FFmpeg native libs unavailable")
         io.github.cyf112233.musicmc.NetMusic.logger.info("[Decoder] openLocal 入口 path=$path")
         openViaPath(path, null)
         activeUrl = path
@@ -279,16 +279,16 @@ class FfmpegDecoder {
     }
 
     private fun openViaPath(path: String?, avioToUse: AVIOContext?) {
-        val fmt = avformat.avformat_alloc_context() ?: throw IOException("avformat_alloc_context 失败")
+        val fmt = avformat.avformat_alloc_context() ?: throw IOException("avformat_alloc_context failed")
         fmtCtx = fmt
         if (avioToUse != null) fmt.pb(avioToUse)
         var ret = avformat.avformat_open_input(fmt, path, null, null)
-        if (ret < 0) throw IOException("avformat_open_input 失败($ret, AVERROR_${-ret})")
+        if (ret < 0) throw IOException("avformat_open_input failed ($ret, AVERROR_${-ret})")
         ret = avformat.avformat_find_stream_info(fmt, null as org.bytedeco.ffmpeg.avutil.AVDictionary?)
         if (ret < 0) {
             avformat.avformat_close_input(fmt)
             fmtCtx = null
-            throw IOException("avformat_find_stream_info 失败($ret)")
+            throw IOException("avformat_find_stream_info failed ($ret)")
         }
         finishOpen(fmt)
     }
@@ -301,7 +301,7 @@ class FfmpegDecoder {
             httpStream = openHttpStream(url, 0)
         }
         val bufRaw = avutil.av_malloc(AVIO_BUFFER_SIZE.toLong())
-            ?: throw IOException("av_malloc 失败")
+            ?: throw IOException("av_malloc failed")
         val avioBuffer = BytePointer(bufRaw)
         val reader = FfmpegAvioRead(this)
         val seeker = FfmpegAvioSeek(this)
@@ -309,7 +309,7 @@ class FfmpegDecoder {
         if (ctx == null || ctx.isNull) {
             runCatching { avioBuffer.deallocate(false) } // 断 GC 队列防二次 free
             avutil.av_free(avioBuffer)
-            throw IOException("avio_alloc_context 失败")
+            throw IOException("avio_alloc_context failed")
         }
         avio = ctx
         avioReadCb = reader
@@ -320,10 +320,10 @@ class FfmpegDecoder {
     /** 打开成功共用收尾:找音频流 + 启动解码器 + 格式信息 */
     private fun finishOpen(fmt: AVFormatContext) {
         val idx = avformat.av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, null as AVCodec?, 0)
-        if (idx < 0) throw IOException("未找到音频流($idx)")
+        if (idx < 0) throw IOException("No audio stream found ($idx)")
         audioStreamIndex = idx
-        val st: AVStream = fmt.streams(idx) ?: throw IOException("音频流不存在")
-        val par = st.codecpar() ?: throw IOException("缺少 codec 参数")
+        val st: AVStream = fmt.streams(idx) ?: throw IOException("Audio stream does not exist")
+        val par = st.codecpar() ?: throw IOException("Missing codec parameters")
         val tb = st.time_base()
         if (tb != null && tb.num() > 0 && tb.den() > 0) {
             tbNum = tb.num()
@@ -331,22 +331,22 @@ class FfmpegDecoder {
         }
         val rate = par.sample_rate()
         val ch = par.ch_layout()?.nb_channels() ?: 0
-        if (rate <= 0 || ch <= 0) throw IOException("音频参数无效(rate=$rate ch=$ch)")
+        if (rate <= 0 || ch <= 0) throw IOException("Invalid audio parameters (rate=$rate ch=$ch)")
         sampleRate = rate
         channels = ch
         durationMs = (fmt.duration() / 1000).toInt().coerceAtLeast(0) // AV_TIME_BASE 微秒→毫秒
 
         val codec: AVCodec = avcodec.avcodec_find_decoder(par.codec_id())
-            ?: throw IOException("无可用解码器(codec_id=${par.codec_id()})")
-        val cc = avcodec.avcodec_alloc_context3(codec) ?: throw IOException("avcodec_alloc_context3 失败")
+            ?: throw IOException("No decoder available (codec_id=${par.codec_id()})")
+        val cc = avcodec.avcodec_alloc_context3(codec) ?: throw IOException("avcodec_alloc_context3 failed")
         codecCtx = cc
         var ret = avcodec.avcodec_parameters_to_context(cc, par)
-        if (ret < 0) throw IOException("avcodec_parameters_to_context 失败($ret)")
+        if (ret < 0) throw IOException("avcodec_parameters_to_context failed ($ret)")
         ret = avcodec.avcodec_open2(cc, codec, null as org.bytedeco.ffmpeg.avutil.AVDictionary?)
-        if (ret < 0) throw IOException("avcodec_open2 失败($ret, AVERROR_${-ret})")
+        if (ret < 0) throw IOException("avcodec_open2 failed ($ret, AVERROR_${-ret})")
 
-        packet = avcodec.av_packet_alloc() ?: throw IOException("av_packet_alloc 失败")
-        frame = avutil.av_frame_alloc() ?: throw IOException("av_frame_alloc 失败")
+        packet = avcodec.av_packet_alloc() ?: throw IOException("av_packet_alloc failed")
+        frame = avutil.av_frame_alloc() ?: throw IOException("av_frame_alloc failed")
     }
 
     // ---------------- 解码 ----------------
@@ -372,7 +372,7 @@ class FfmpegDecoder {
                 val fr = avcodec.avcodec_receive_frame(cc, frm)
                 return if (fr >= 0) convertFrame(frm) else null
             }
-            if (r < 0) throw IOException("av_read_frame 失败($r, AVERROR_${-r})")
+            if (r < 0) throw IOException("av_read_frame failed ($r, AVERROR_${-r})")
             if (pkt.stream_index() != audioStreamIndex) {
                 avcodec.av_packet_unref(pkt)
                 continue
@@ -387,7 +387,7 @@ class FfmpegDecoder {
                     avcodec.avcodec_flush_buffers(cc)
                 }
                 if (consecutiveBadPackets > MAX_CONSECUTIVE_BAD_PACKETS) {
-                    throw IOException("avcodec_send_packet 连续失败($sr, 已跳过 $MAX_CONSECUTIVE_BAD_PACKETS 个坏包)")
+                    throw IOException("avcodec_send_packet failed repeatedly ($sr, skipped $MAX_CONSECUTIVE_BAD_PACKETS bad packets)")
                 }
                 continue
             }
@@ -396,7 +396,7 @@ class FfmpegDecoder {
                 val rr = avcodec.avcodec_receive_frame(cc, frm)
                 if (rr == AVERROR_EAGAIN) break // 需要更多包
                 if (rr == AVERROR_EOF) return null
-                if (rr < 0) throw IOException("avcodec_receive_frame 失败($rr)")
+                if (rr < 0) throw IOException("avcodec_receive_frame failed ($rr)")
                 if (closed) return null
                 return convertFrame(frm)
             }
@@ -407,11 +407,11 @@ class FfmpegDecoder {
     /** 帧 → s16 交错字节(swr 惰性初始化;帧参数变化时重建) */
     private fun convertFrame(frm: AVFrame): DecodedAudio {
         val nb = frm.nb_samples()
-        if (nb <= 0) throw IOException("帧无样本")
+        if (nb <= 0) throw IOException("Frame has no samples")
         val rate = frm.sample_rate()
         val ch = frm.ch_layout()?.nb_channels() ?: 0
         val fmt = frm.format()
-        if (rate <= 0 || ch <= 0) throw IOException("帧音频参数无效(rate=$rate ch=$ch)")
+        if (rate <= 0 || ch <= 0) throw IOException("Invalid frame audio parameters (rate=$rate ch=$ch)")
         val swr = ensureSwr(frm, ch, rate, fmt)
         samplesDecoded += nb.toLong()
 
@@ -426,7 +426,7 @@ class FfmpegDecoder {
             try {
                 outPtrs.put(0L, outBuf)
                 val conv = swresample.swr_convert(swr, outPtrs, nb, inPtrs, nb)
-                if (conv < 0) throw IOException("swr_convert 失败($conv)")
+                if (conv < 0) throw IOException("swr_convert failed ($conv)")
                 if (conv == 0) {
                     // 理论不会发生(输入==输出样本数);空帧防御
                     return DecodedAudio(ByteArray(0), rate, ch, calcPtsMs(frm, rate))
@@ -469,9 +469,9 @@ class FfmpegDecoder {
             swr, outLay, AV_SAMPLE_FMT_S16, rate,
             frm.ch_layout(), fmt, rate, 0, null,
         )
-        if (ret < 0) throw IOException("swr_alloc_set_opts2 失败($ret)")
+        if (ret < 0) throw IOException("swr_alloc_set_opts2 failed ($ret)")
         val init = swresample.swr_init(swr)
-        if (init < 0) throw IOException("swr_init 失败($init)")
+        if (init < 0) throw IOException("swr_init failed ($init)")
         swrCtx = swr
         return swr
     }
@@ -492,7 +492,7 @@ class FfmpegDecoder {
         val target = positionMs.toLong() * tbDen / (1000L * tbNum) // 流 time_base 单位
         val ret = avformat.av_seek_frame(fmt, idx, target, AVSEEK_FLAG_BACKWARD)
         if (ret < 0) {
-            io.github.cyf112233.musicmc.NetMusic.logger.warn("av_seek_frame 失败($ret),回退重开+丢弃: ${activeUrl?.take(80)}")
+            io.github.cyf112233.musicmc.NetMusic.logger.warn("av_seek_frame failed ($ret), falling back to reopen+skip: ${activeUrl?.take(80)}")
             reopenAndSkip(positionMs)
             return
         }
@@ -510,7 +510,7 @@ class FfmpegDecoder {
         try {
             open(url, ref, cands)
         } catch (e: Exception) {
-            io.github.cyf112233.musicmc.NetMusic.logger.warn("seek 回退重开失败: ${e.javaClass.simpleName}: ${e.message}")
+            io.github.cyf112233.musicmc.NetMusic.logger.warn("seek fallback reopen failed: ${e.javaClass.simpleName}: ${e.message}")
             return
         }
         val target = positionMs.toLong() * sampleRate / 1000
@@ -558,7 +558,7 @@ class FfmpegDecoder {
                     val skipped = discard(body, offset)
                     if (skipped < offset) {
                         runCatching { body.close() }
-                        throw IOException("偏移超流长(期望丢弃 $offset,实际丢弃 $skipped)")
+                        throw IOException("Offset beyond stream length (expected to discard $offset, actually discarded $skipped)")
                     }
                     httpPos = offset
                 }
@@ -568,7 +568,7 @@ class FfmpegDecoder {
                 last = e
             }
         }
-        throw IOException("HTTP 流打开失败(${last?.message ?: "无可用地址"})")
+        throw IOException("HTTP stream open failed (${last?.message ?: "no available URL"})")
     }
 
     /** 丢弃 [n] 字节到 EOF,返回实际丢弃数(提前 EOF 时 < n) */

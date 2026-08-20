@@ -235,7 +235,7 @@ object CoverTextureCache {
         }
         try {
             val bi = ImageIO.read(ByteArrayInputStream(bytes))
-                ?: throw IOException("ImageIO 无法识别图片格式")
+                ?: throw IOException("ImageIO cannot recognize image format")
             val img = copyArgbToNativeImage(bi)
             logInfo("ImageIO 回退解码成功:${img.getWidth()}x${img.getHeight()} url=${urlTag(url)}")
             return img

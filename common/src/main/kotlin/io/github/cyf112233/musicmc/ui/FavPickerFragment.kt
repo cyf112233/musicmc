@@ -49,7 +49,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "选择收藏夹"
+                text = "Select Folder"
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(dp(16f), dp(12f), dp(16f), dp(4f))
             },
@@ -58,7 +58,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = NetMusic.player.current?.let { "当前歌曲: ${it.title}" } ?: "请先播放歌曲"
+                text = NetMusic.player.current?.let { "Current song: ${it.title}" } ?: "Play a song first"
                 setTextSize(13f)
                 setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
@@ -69,7 +69,7 @@ class FavPickerFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "加载中…"
+            text = "Loading…"
             setTextSize(14f)
             setPadding(dp(16f), dp(8f), dp(16f), dp(8f))
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
@@ -89,7 +89,7 @@ class FavPickerFragment : Fragment() {
             visibility = View.GONE
         }.also { panel ->
             createInput = EditText(context).apply {
-                hint = "收藏夹名称"
+                hint = "Folder name"
                 setTextSize(14f)
                 // Enter = 确定(无 IME 管线,直接按键触发)
                 Widgets.bindEnter(this) { submitCreate() }
@@ -97,13 +97,13 @@ class FavPickerFragment : Fragment() {
             panel.addView(createInput, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             panel.addView(
                 Button(context, null, R.attr.buttonElevatedStyle).apply {
-                    text = "确定"
+                    text = "OK"
                     setOnClickListener { submitCreate() }
                 },
             )
             panel.addView(
                 Button(context, null, R.attr.borderlessButtonStyle).apply {
-                    text = "取消"
+                    text = "Cancel"
                     setOnClickListener { hideCreatePanel() }
                 },
             )
@@ -112,7 +112,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "新建收藏夹"
+                text = "New Folder"
                 setOnClickListener { showCreatePanel() }
             },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
@@ -132,12 +132,12 @@ class FavPickerFragment : Fragment() {
      */
     private fun load() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            statusText?.text = "请先在设置中登录 B 站"
+            statusText?.text = "Please log in to Bilibili in Settings first"
             statusText?.visibility = View.VISIBLE
             listView?.visibility = View.GONE
             return
         }
-        statusText?.text = "加载中…"
+        statusText?.text = "Loading…"
         statusText?.visibility = View.VISIBLE
         listView?.visibility = View.VISIBLE
         // 刷新缓存(填充 folderFavs,供每行 ✓ 标记);完成后重新绑定列表
@@ -150,7 +150,7 @@ class FavPickerFragment : Fragment() {
         BiliActions.folders { list, err ->
             if (!isAdded) return@folders
             if (err != null) {
-                statusText?.text = "加载失败: $err"
+                statusText?.text = "Failed to load: $err"
                 statusText?.visibility = View.VISIBLE
                 return@folders
             }
@@ -164,7 +164,7 @@ class FavPickerFragment : Fragment() {
         if (!isAdded) return
         val context = requireContext()
         if (folders.isEmpty()) {
-            statusText?.text = "暂无收藏夹,点击下方按钮新建"
+            statusText?.text = "No favorites yet, click the button below to create one"
             statusText?.visibility = View.VISIBLE
         } else {
             statusText?.visibility = View.GONE
@@ -179,7 +179,7 @@ class FavPickerFragment : Fragment() {
     private fun onFolderClick(position: Int) {
         val song = NetMusic.player.current
         if (song == null) {
-            Widgets.toast(requireContext(), "请先播放歌曲")
+            Widgets.toast(requireContext(), "Play a song first")
             return
         }
         val folder = folders.getOrNull(position) ?: return
@@ -193,7 +193,7 @@ class FavPickerFragment : Fragment() {
             bindFolders()
             Widgets.toast(
                 requireContext(),
-                if (faved) "已收藏到 ${folder.title}" else "已从 ${folder.title} 移除",
+                if (faved) "Added to favorites: ${folder.title}" else "Removed from ${folder.title}",
             )
         }
     }
@@ -202,7 +202,7 @@ class FavPickerFragment : Fragment() {
 
     private fun showCreatePanel() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Widgets.toast(requireContext(), "请先在设置中登录 B 站")
+            Widgets.toast(requireContext(), "Please log in to Bilibili in Settings first")
             return
         }
         createPanel?.visibility = View.VISIBLE
@@ -216,7 +216,7 @@ class FavPickerFragment : Fragment() {
     private fun submitCreate() {
         val title = createInput?.text?.toString()?.trim().orEmpty()
         if (title.isEmpty()) {
-            Widgets.toast(requireContext(), "请输入收藏夹名称")
+            Widgets.toast(requireContext(), "Please enter a folder name")
             return
         }
         BiliActions.createFolder(title) { _, err ->
@@ -225,7 +225,7 @@ class FavPickerFragment : Fragment() {
                 Widgets.toast(requireContext(), err)
                 return@createFolder
             }
-            Widgets.toast(requireContext(), "已新建收藏夹")
+            Widgets.toast(requireContext(), "Folder created")
             hideCreatePanel()
             load()
         }
@@ -275,7 +275,7 @@ class FavFolderAdapter(
             ellipsize = TextUtils.TruncateAt.END
         })
         column.addView(TextView(context).apply {
-            text = "${item.mediaCount} 个内容"
+            text = "${item.mediaCount} items"
             setTextSize(12f)
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END

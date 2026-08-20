@@ -1,8 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
-import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.RowCoverCache
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Song
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.EditBox
@@ -15,7 +16,7 @@ import net.minecraft.network.chat.Component
  * YACL 版搜索页:输入关键词搜索 B 站歌曲,点击结果播放并返回主界面。
  * 输入框用 MC 原生 EditBox(IME / 光标 / 粘贴支持与原版聊天一致);视觉走 YaclTheme。
  */
-class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜索")) {
+class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("Search")) {
 
     private val results = ArrayList<Song>()
     private var error: String? = null
@@ -29,7 +30,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
 
     override fun init() {
         super.init()
-        val box = EditBox(font, width / 2 - 180, 20, 300, 16, Component.literal("搜索歌曲"))
+        val box = EditBox(font, width / 2 - 180, 20, 300, 16, Component.literal("Search Songs"))
         box.setMaxLength(60)
         editBox = box
         addWidget(box)
@@ -43,7 +44,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
 
         // 输入框(MC 原生渲染)
         editBox?.extractWidgetRenderState(graphics, mouseX, mouseY, partialTick)
@@ -51,27 +52,29 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
         // 搜索按钮
         rectSearchBtn.x1 = width / 2 + 126; rectSearchBtn.y1 = 20
         rectSearchBtn.x2 = width / 2 + 126 + 56; rectSearchBtn.y2 = 36
-        YaclTheme.drawBtn(g, rectSearchBtn, if (searching) "…" else "搜索", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectSearchBtn, if (searching) "…" else "Search", mouseX, mouseY, accent = true)
 
         // 状态 / 错误
         var listY = 48
         if (error != null) {
-            g.drawText("搜索失败:$error", width / 2 - 180, listY, 11f, 1f, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, "Search failed: $error", width / 2 - 180, listY, 11f, 360, YaclTheme.colorError)
             listY += 16
         } else if (results.isEmpty() && !searching) {
-            g.drawText("输入关键词后点「搜索」,或按回车", width / 2 - 180, listY, 11f, 1f, YaclTheme.colorTextDim)
+            YaclTheme.drawTextClipped(g, "Type a keyword and press Search or Enter", width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
             listY += 16
         }
 
-        // 结果列表(滚动)
-        val rowH = 20
+        // 结果列表(滚动;行首缩略封面)
+        RowCoverCache.pump()
+        val rowH = 24
         val listW = 360
         val listX = width / 2 - 180
         var idx = scroll
         var y = listY
         while (idx < results.size && y + rowH < h - 8) {
             val song = results[idx]
-            YaclTheme.drawSongRow(g, song.title, song.artist, false, listX, y, listW, rowH, mouseX, mouseY)
+            RowCoverCache.request(song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, false, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
             y += rowH
             idx++
         }
@@ -87,7 +90,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
         if (rectSearchBtn.hit(x, y)) { doSearch(); return true }
         // 结果行点击 → 播放并返回主界面
         val listY = 48
-        val rowH = 20
+        val rowH = 24
         val listX = width / 2 - 180
         if (x >= listX && x < listX + 360 && y >= listY) {
             val row = (y - listY).toInt() / rowH + scroll
@@ -100,7 +103,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        val rowH = 20
+        val rowH = 24
         val maxScroll = (results.size - (height - 48) / rowH).coerceAtLeast(0)
         scroll = (scroll - dy.toInt()).coerceIn(0, maxScroll)
         return true

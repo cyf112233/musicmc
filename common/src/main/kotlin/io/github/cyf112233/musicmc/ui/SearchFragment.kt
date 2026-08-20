@@ -31,14 +31,14 @@ class SearchFragment : Fragment() {
         }
 
         val loading = TextView(context).apply {
-            text = "搜索中..."
+            text = "Searching..."
             setTextSize(15f)
             gravity = Gravity.CENTER
         }
         root.addView(loading, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
 
         val emptyView = TextView(context).apply {
-            text = "未找到相关歌曲"
+            text = "No related songs found"
             setTextSize(16f)
             gravity = Gravity.CENTER
             visibility = View.GONE
@@ -54,7 +54,7 @@ class SearchFragment : Fragment() {
                 Async.onUi {
                     loading.visibility = View.GONE
                     if (err != null) {
-                        Toast.makeText(context, "搜索失败: $err", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Search failed: $err", Toast.LENGTH_SHORT).show()
                     } else if (results.isEmpty()) {
                         emptyView.visibility = View.VISIBLE
                     } else {

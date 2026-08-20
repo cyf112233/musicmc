@@ -105,7 +105,7 @@ object YaclTheme {
     }
 
     /**
-     * 进度条 / 音量条统一样式:圆角轨道 + 已填充段 + 渐变高光 + 滑块。
+     * 进度条 / Volume条统一样式:圆角轨道 + 已填充段 + 渐变高光 + 滑块。
      * [active] 为 true(拖动中 / hover)时滑块放大并高亮,填充段提亮。
      */
     fun drawProgressBar(
@@ -181,7 +181,65 @@ object YaclTheme {
         g.drawText(text, centerX - tw / 2, y, sizePx, 1f, colorTextMain)
     }
 
-    /** 歌曲行(标题+歌手;当前播放左侧主题色竖条+底色,hover 高亮) */
+    /**
+     * 按最大宽度截断文本(超过加省略号,避免长标题/长提示溢出卡片或屏幕)。
+     * 字号缩放统一按 [sizePx]/12 折算(与 drawCenteredTitle 同一套近似)。
+     */
+    fun truncate(g: GuiGraphicsHudGui, text: String, maxWidth: Int, sizePx: Float): String {
+        if (text.isEmpty() || maxWidth <= 0) return text
+        val k = sizePx / 12f
+        if (g.textWidth(text).toFloat() * k <= maxWidth) return text
+        var t = text
+        while (t.length > 1 && g.textWidth(t + "…").toFloat() * k > maxWidth) {
+            t = t.dropLast(1)
+        }
+        return t + "…"
+    }
+
+    /** 带宽度截断的文本绘制(长文本自动省略,不溢出卡片) */
+    fun drawTextClipped(g: GuiGraphicsHudGui, text: String, x: Int, y: Int, sizePx: Float, maxWidth: Int, color: Int) {
+        g.drawText(truncate(g, text, maxWidth, sizePx), x, y, sizePx, 1f, color)
+    }
+
+    /**
+     * 横向往返滚动文本(marquee):文本超过 [maxWidth] 时在区间内往返平移显示全名,
+     * 未超时静态绘制。用于主界面标题等"想看全名又不允许换行"的场景。
+     * 滚动节奏:每像素 40ms,到边界停顿 800ms 再反向(避免快速来回晃眼)。
+     */
+    fun drawMarqueeText(
+        g: GuiGraphicsHudGui,
+        text: String,
+        x: Int,
+        y: Int,
+        sizePx: Float,
+        maxWidth: Int,
+        color: Int,
+    ) {
+        if (text.isEmpty() || maxWidth <= 0) {
+            return
+        }
+        val k = sizePx / 12f
+        val tw = (g.textWidth(text).toFloat() * k).toInt()
+        if (tw <= maxWidth) {
+            g.drawText(text, x, y, sizePx, 1f, color)
+            return
+        }
+        val travel = tw - maxWidth // 需要平移的距离(像素)
+        val period = travel * 40L + 1600L // 单程像素时间 + 两端停顿
+        val t = System.currentTimeMillis() % (period * 2)
+        val offset = when {
+            t < travel * 40L -> -(t / 40L).toInt() // 向右滚出(露出开头)
+            t < travel * 40L + 800L -> -travel // 左端停顿
+            t < travel * 80L + 800L -> -travel + ((t - travel * 40L - 800L) / 40L).toInt() // 向左滚回(露出结尾)
+            else -> 0 // 右端停顿
+        }
+        g.drawText(text, x + offset, y, sizePx, 1f, color)
+    }
+
+    /**
+     * 歌曲行(标题+歌手;当前播放左侧主题色竖条+底色,hover 高亮)。
+     * [coverUrl] 非空时行首绘制缩略封面(经 RowCoverCache,异步加载)。
+     */
     fun drawSongRow(
         g: GuiGraphicsHudGui,
         title: String,
@@ -193,6 +251,7 @@ object YaclTheme {
         rowH: Int,
         mouseX: Int,
         mouseY: Int,
+        coverUrl: String? = null,
     ) {
         val hover = mouseY in y until y + rowH && mouseX in x until x + w
         when {
@@ -202,11 +261,23 @@ object YaclTheme {
             }
             hover -> g.fill(x, y, x + w, y + rowH, colorRowHover)
         }
-        g.drawText(title.ifBlank { "未知标题" }, x + 10, y + 2, 11f, 1f, if (current) colorTextMain else 0xFFDDDDDD.toInt())
-        g.drawText(artist, x + 10, y + 12, 9f, 1f, colorTextDim)
+        var textX = x + 10
+        if (coverUrl != null) {
+            // 行首缩略封面(12px 圆角块;未就绪时深色占位)
+            val coverSize = (rowH - 6).coerceAtLeast(10)
+            val coverId = io.github.cyf112233.musicmc.client.RowCoverCache.identifier(coverUrl)
+            if (coverId != null) {
+                g.drawTexture(coverId, x + 4, y + 3, coverSize, coverSize)
+            } else {
+                fillRound(g, x + 4, y + 3, coverSize, coverSize, 2, colorBtn, colorCardBorder)
+            }
+            textX = x + 4 + coverSize + 6
+        }
+        drawTextClipped(g, title.ifBlank { "Unknown" }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
+        drawTextClipped(g, artist, textX, y + 12, 9f, x + w - textX - 6, colorTextDim)
     }
 
-    /** 通用行(标题+副标题;hover 高亮) */
+    /** General行(标题+副标题;hover 高亮) */
     fun drawListRow(
         g: GuiGraphicsHudGui,
         title: String,
@@ -226,12 +297,12 @@ object YaclTheme {
         } else if (hover) {
             g.fill(x, y, x + w, y + rowH, colorRowHover)
         }
-        g.drawText(title.ifBlank { "未命名" }, x + 6, y + 2, 11f, 1f, if (highlight) colorTextMain else colorTextMain)
-        g.drawText(sub, x + 6, y + 14, 9f, 1f, colorTextDim)
+        drawTextClipped(g, title.ifBlank { "Unnamed" }, x + 6, y + 2, 11f, w - 12, colorTextMain)
+        drawTextClipped(g, sub, x + 6, y + 14, 9f, w - 12, colorTextDim)
     }
 
     /** 列表底部滚动提示 */
     fun drawScrollHint(g: GuiGraphicsHudGui, w: Int, h: Int) {
-        g.drawText("↑↓ 滚动查看更多", w / 2 + 100, h - 18, 9f, 1f, colorTextFaint)
+        g.drawText("Scroll for more", w / 2 + 100, h - 18, 9f, 1f, colorTextFaint)
     }
 }

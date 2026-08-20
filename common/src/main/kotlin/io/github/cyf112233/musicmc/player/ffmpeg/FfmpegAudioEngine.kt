@@ -83,7 +83,7 @@ class FfmpegAudioEngine : AudioEngine {
     override fun load(url: String, options: StreamOptions, onStarted: () -> Unit, onFinished: () -> Unit, onError: (String) -> Unit) {
         if (!FfmpegDecoder.nativeAvailable()) {
             // 同步抛出不触碰回调(MusicPlayer 已前置检查拦截,此处为兜底防御)
-            throw FfmpegUnavailableException("FFmpeg 原生库不可用")
+            throw FfmpegUnavailableException("FFmpeg native libs unavailable")
         }
         this.onStarted = onStarted
         this.onFinished = onFinished
@@ -249,7 +249,7 @@ class FfmpegAudioEngine : AudioEngine {
                     dec.open(u, referer, emptyList()) { off, bytes, len -> cacheWriter?.write(off, bytes, len) }
                     io.github.cyf112233.musicmc.NetMusic.logger.info("[Engine] session=$mySession open 成功 url=${u.take(80)}")
                     val info = dec.formatInfo()
-                    if (info.sampleRate <= 0 || info.channels <= 0) throw RuntimeException("FFmpeg 音频参数无效")
+                    if (info.sampleRate <= 0 || info.channels <= 0) throw RuntimeException("Invalid FFmpeg audio parameters")
                     // 已知流长注入缓存(Content-Length);随后启动预加载线程提前下载剩余部分
                     cacheWriter?.setTotal(dec.avioSize())
                     if (cacheWriter != null) startPrefetch(u, cacheWriter!!, mySession)
@@ -345,8 +345,8 @@ class FfmpegAudioEngine : AudioEngine {
             if (!stopped && mySession == sessionId) {
                 onError(
                     when (e) {
-                        is java.io.IOException -> "网络错误或音频流中断(${e.message ?: e.javaClass.simpleName})"
-                        else -> "音频格式不支持或解码失败(${e.javaClass.simpleName})"
+                        is java.io.IOException -> "Network error or audio stream interrupted (${e.message ?: e.javaClass.simpleName})"
+                        else -> "Unsupported audio format or decode failure (${e.javaClass.simpleName})"
                     },
                 )
             }
@@ -434,7 +434,7 @@ class FfmpegAudioEngine : AudioEngine {
 
     /** 创建输出:桌面 javax.sound / Android AAudio(API 26+,独立于 OpenSL/OpenAL,不冲突 MC SoundEngine) */
     private fun createOutput(rate: Int, channels: Int): AudioOutput {
-        if (rate <= 0 || channels <= 0) throw java.io.IOException("FFmpeg 解码输出格式无效")
+        if (rate <= 0 || channels <= 0) throw java.io.IOException("Invalid FFmpeg output format")
         return if (NativeLibBridge.isAndroid()) AAudioOutput(rate, channels) else SourceDataLineOutput(rate, channels)
     }
 

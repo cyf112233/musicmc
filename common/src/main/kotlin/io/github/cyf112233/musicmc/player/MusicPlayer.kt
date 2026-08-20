@@ -142,7 +142,7 @@ class MusicPlayer(
             if (!FfmpegDecoder.nativeAvailable()) {
                 state = PlayerState.ERROR
                 notifyStateChanged()
-                val msg = "当前平台不支持播放(缺少 FFmpeg 原生库)"
+                val msg = "Playback not supported on this platform (missing FFmpeg native libs)"
                 toast(msg)
                 io.github.cyf112233.musicmc.NetMusic.logger.warn(msg)
                 return@loadUrl
@@ -152,7 +152,7 @@ class MusicPlayer(
                 if (result == null) {
                     state = PlayerState.ERROR
                     notifyStateChanged()
-                    val msg = if (err.isNullOrBlank()) "播放失败" else "播放失败: $err"
+                    val msg = if (err.isNullOrBlank()) "Playback failed" else "Playback failed: $err"
                     toast(msg)
                     io.github.cyf112233.musicmc.NetMusic.logger.warn(msg)
                 } else {
@@ -203,10 +203,10 @@ class MusicPlayer(
                             // 第二次仍失败才自动切歌
                             if (!midRetried) {
                                 midRetried = true
-                                toast("播放中断,正在重新获取地址…")
+                                toast("Playback interrupted, fetching a new URL…")
                                 loadUrl()
                             } else {
-                                toast("播放中断,已自动切歌")
+                                toast("Playback interrupted, skipped to next song")
                                 handleFinished()
                             }
                         } else if (!startupRetried) {

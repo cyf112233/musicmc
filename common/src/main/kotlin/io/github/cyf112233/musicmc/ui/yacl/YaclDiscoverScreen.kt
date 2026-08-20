@@ -10,10 +10,10 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
 
 /**
- * YACL 版发现页:展示首页推荐歌单(NetMusic.source.homePlaylists),
- * 点击歌单进入详情页;视觉走 YaclTheme。
+ * YACL 版发现页:展示首页推荐Playlist(NetMusic.source.homePlaylists),
+ * 点击Playlist进入详情页;视觉走 YaclTheme。
  */
-class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("发现")) {
+class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("Discover")) {
 
 
     private var playlists: List<Playlist>? = null
@@ -42,20 +42,20 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("�
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
-        YaclTheme.drawCenteredTitle(g, "发现", w / 2, 10)
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        YaclTheme.drawCenteredTitle(g, "Discover", w / 2, 10)
 
         val list = playlists
         if (list == null && error == null) {
-            g.drawText("加载推荐中…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("Loading…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
-            g.drawText("加载失败:$error", w / 2 - 100, h / 2 - 16, 11f, 1f, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
             return
         }
         if (list!!.isEmpty()) {
-            g.drawText("暂无推荐歌单", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("No playlists yet", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         val rowH = 24
@@ -65,7 +65,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("�
         var y = 40
         while (idx < list.size && y + rowH < h - 8) {
             val p = list[idx]
-            YaclTheme.drawListRow(g, p.name.ifBlank { "未命名歌单" }, "${p.trackCount} 首", listX, y, listW, rowH, mouseX, mouseY)
+            YaclTheme.drawListRow(g, p.name.ifBlank { "Unnamed playlist" }, "${p.trackCount} tracks", listX, y, listW, rowH, mouseX, mouseY)
             y += rowH
             idx++
         }

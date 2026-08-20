@@ -41,7 +41,7 @@ object LyricProviders {
     const val KUGOU = "kugou"
 
     /** 来源常量 → 中文展示名(UI 来源标签 / 候选行后缀用) */
-    private val SOURCE_LABELS = mapOf(NETEASE to "网易云", QQ to "QQ音乐", KUGOU to "酷狗")
+    private val SOURCE_LABELS = mapOf(NETEASE to "NetEase", QQ to "QQ Music", KUGOU to "Kugou")
 
     fun sourceLabel(source: String): String = SOURCE_LABELS[source] ?: source
 
@@ -55,11 +55,11 @@ object LyricProviders {
                     NETEASE -> searchNetease(keyword)
                     QQ -> searchQq(keyword)
                     KUGOU -> searchKugou(keyword)
-                    else -> throw IOException("未知歌词来源: $source")
+                    else -> throw IOException("Unknown lyric source: $source")
                 }
                 cb(list, null)
             } catch (e: Exception) {
-                cb(emptyList(), "搜索失败: ${e.message ?: "网络错误"}")
+                cb(emptyList(), "Search failed: ${e.message ?: "Network error"}")
             }
         }
     }
@@ -72,11 +72,11 @@ object LyricProviders {
                     NETEASE -> fetchNetease(candidate.remoteId)
                     QQ -> fetchQq(candidate.remoteId)
                     KUGOU -> fetchKugou(candidate.remoteId)
-                    else -> throw IOException("未知歌词来源: ${candidate.source}")
+                    else -> throw IOException("Unknown lyric source: ${candidate.source}")
                 }
-                if (lines.isEmpty()) cb(emptyList(), "该来源暂无歌词") else cb(lines, null)
+                if (lines.isEmpty()) cb(emptyList(), "No lyrics from this source") else cb(lines, null)
             } catch (e: Exception) {
-                cb(emptyList(), "取歌词失败: ${e.message ?: "网络错误"}")
+                cb(emptyList(), "Failed to fetch lyrics: ${e.message ?: "Network error"}")
             }
         }
     }
@@ -221,12 +221,12 @@ object LyricProviders {
         val metaUrl = "http://krcs.kugou.com/search?keyword=%20-%20&ver=1&hash=$hash&client=mobi&man=yes"
         val meta = Http.getJson(metaUrl, extraHeaders = KUGOU_HEADERS)
         val candidate = meta.optArray("candidates")?.firstOrNull { it.isJsonObject }?.asJsonObject
-            ?: throw IOException("酷狗无歌词数据")
-        val id = candidate.optString("id") ?: throw IOException("酷狗无歌词数据")
-        val accessKey = candidate.optString("accesskey") ?: throw IOException("酷狗无歌词数据")
+            ?: throw IOException("Kugou has no lyric data")
+        val id = candidate.optString("id") ?: throw IOException("Kugou has no lyric data")
+        val accessKey = candidate.optString("accesskey") ?: throw IOException("Kugou has no lyric data")
         val dlUrl = "http://lyrics.kugou.com/download?charset=utf8&accesskey=$accessKey&id=$id&client=mobi&fmt=lrc&ver=1"
         val dl = Http.getJson(dlUrl, extraHeaders = KUGOU_HEADERS)
-        val content = dl.optString("content") ?: throw IOException("酷狗歌词内容为空")
+        val content = dl.optString("content") ?: throw IOException("Kugou lyric content is empty")
         val lrc = String(Base64.getDecoder().decode(content), StandardCharsets.UTF_8)
         return Lrc.parseLrc(lrc)
     }

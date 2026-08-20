@@ -60,7 +60,7 @@ class QueueFragment : Fragment() {
         topBar.addView(modeButton, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
         val clearButton = Button(context, null, R.attr.borderlessButtonStyle).apply {
-            text = "清空队列"
+            text = "Clear Queue"
             setOnClickListener { NetMusic.player.clearQueue() }
         }
         topBar.addView(clearButton)
@@ -98,7 +98,7 @@ class QueueFragment : Fragment() {
     }
 
     private fun updateModeText() {
-        modeButton?.text = "循环模式: ${Widgets.playModeLabel(NetMusic.player.mode)}"
+        modeButton?.text = "Play Mode: ${Widgets.playModeLabel(NetMusic.player.mode)}"
     }
 
     companion object {

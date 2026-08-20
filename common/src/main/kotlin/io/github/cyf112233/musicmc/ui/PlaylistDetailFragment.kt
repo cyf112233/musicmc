@@ -74,7 +74,7 @@ class PlaylistDetailFragment : Fragment() {
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurface) ?: 0xFFFFFFFF.toInt())
         })
         songCountText = TextView(context).apply {
-            text = if (songs.isEmpty()) "加载中…" else "${songs.size} 首"
+            text = if (songs.isEmpty()) "Loading…" else "${songs.size} songs"
             setTextSize(12f)
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             setPadding(0, dp(2f), 0, 0)
@@ -87,7 +87,7 @@ class PlaylistDetailFragment : Fragment() {
 
         // "▶ 播放全部" elevated 按钮:整单播放(懒加载完成前禁用)
         playAllButton = Button(context, null, R.attr.buttonElevatedStyle).apply {
-            text = "▶ 播放全部"
+            text = "▶ Play All"
             isEnabled = songs.isNotEmpty()
             setOnClickListener {
                 val s = this@PlaylistDetailFragment.songs
@@ -105,7 +105,7 @@ class PlaylistDetailFragment : Fragment() {
         if (playlist.songs.isEmpty()) {
             // 只有歌单信息(从首页推荐/我的歌单进入):先显示"加载中…",异步拉取详情后重建列表
             val loading = TextView(context).apply {
-                text = "加载中…"
+                text = "Loading…"
                 setTextSize(15f)
                 gravity = Gravity.CENTER
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
@@ -119,14 +119,14 @@ class PlaylistDetailFragment : Fragment() {
                     if (!isAdded || view == null) return@onUi
                     loading.visibility = View.GONE
                     if (err != null) {
-                        loading.text = "加载失败: $err"
+                        loading.text = "Failed to load: $err"
                         loading.visibility = View.VISIBLE
                     } else if (detail.songs.isEmpty()) {
-                        loading.text = "歌单为空"
+                        loading.text = "Playlist is empty"
                         loading.visibility = View.VISIBLE
                     } else {
                         songs = detail.songs
-                        songCountText?.text = "${detail.songs.size} 首"
+                        songCountText?.text = "${detail.songs.size} songs"
                         playAllButton?.isEnabled = true
                         bindSongs(listView, detail.songs)
                         listView.visibility = View.VISIBLE

@@ -66,7 +66,7 @@ class HomeFragment : Fragment() {
     // ---------------- 内容构建 ----------------
 
     private fun buildContent(context: Context, content: LinearLayout) {
-        content.addView(buildHomePlaylistsSection(context, "排行榜"), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        content.addView(buildHomePlaylistsSection(context, "Rankings"), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
     // ---------------- 排行榜区 ----------------
@@ -100,7 +100,7 @@ class HomeFragment : Fragment() {
             Async.onUi {
                 if (err != null) {
                     box.removeAllViews()
-                    Widgets.toast(context, "排行榜加载失败: $err")
+                    Widgets.toast(context, "Failed to load rankings: $err")
                 } else {
                     box.removeAllViews()
                     val grid = GridLayout(context).apply {
@@ -158,7 +158,7 @@ class HomeFragment : Fragment() {
     /** "加载中…"占位 TextView */
     private fun buildLoadingPlaceholder(context: Context): TextView =
         TextView(context).apply {
-            text = "加载中…"
+            text = "Loading…"
             setTextSize(13f)
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             setPadding(dp(16f), dp(8f), dp(16f), dp(8f))

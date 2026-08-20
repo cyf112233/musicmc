@@ -51,12 +51,12 @@ object TitleLyricLookup {
             try {
                 val keyword = cleanTitle(title)
                 if (keyword.isBlank()) {
-                    callback(emptyList(), "未找到匹配歌词")
+                    callback(emptyList(), "No matching lyrics found")
                     return@execute
                 }
                 val songs = search(keyword)
                 if (songs.isEmpty()) {
-                    callback(emptyList(), "未找到匹配歌词")
+                    callback(emptyList(), "No matching lyrics found")
                     return@execute
                 }
                 // 相似度降序(稳定排序保持网易云排序),逐个候选取歌词:跳过无歌词的候选
@@ -67,9 +67,9 @@ object TitleLyricLookup {
                         return@execute
                     }
                 }
-                callback(emptyList(), "未找到匹配歌词")
+                callback(emptyList(), "No matching lyrics found")
             } catch (e: Exception) {
-                callback(emptyList(), "标题匹配歌词失败")
+                callback(emptyList(), "Failed to match lyrics by title")
             }
         }
     }

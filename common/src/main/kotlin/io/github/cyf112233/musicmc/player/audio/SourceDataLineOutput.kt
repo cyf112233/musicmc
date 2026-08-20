@@ -14,7 +14,7 @@ class SourceDataLineOutput(rate: Int, channels: Int) : AudioOutput {
     private var line: SourceDataLine? = null
 
     init {
-        if (rate <= 0 || channels <= 0) throw java.io.IOException("FFmpeg 解码输出格式无效")
+        if (rate <= 0 || channels <= 0) throw java.io.IOException("Invalid FFmpeg output format")
         val format = AudioFormat(rate.toFloat(), 16, channels, true, false)
         val l = AudioSystem.getSourceDataLine(format)
         l.open(format, 131072) // 128KB line 缓冲,减少 write 阻塞与碎片化

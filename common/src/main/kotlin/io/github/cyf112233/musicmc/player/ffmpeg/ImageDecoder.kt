@@ -113,7 +113,7 @@ object ImageDecoder {
         fun decode(): RgbaImage? {
             // ---- 1. 内存 AVIO ----
             val bufRaw = avutil.av_malloc(AVIO_BUFFER_SIZE.toLong())
-                ?: throw IOException("av_malloc 失败")
+                ?: throw IOException("av_malloc failed")
             val avioBuffer = BytePointer(bufRaw)
             this.avioBuffer = avioBuffer
             val reader = ImageReadCb(this)
@@ -121,37 +121,37 @@ object ImageDecoder {
             readCb = reader
             seekCb = seeker
             val avioCtx = avformat.avio_alloc_context(avioBuffer, AVIO_BUFFER_SIZE, 0, null, reader, null, seeker)
-                ?: throw IOException("avio_alloc_context 失败")
+                ?: throw IOException("avio_alloc_context failed")
             avio = avioCtx
 
-            val fmt = avformat.avformat_alloc_context() ?: throw IOException("avformat_alloc_context 失败")
+            val fmt = avformat.avformat_alloc_context() ?: throw IOException("avformat_alloc_context failed")
             this.fmt = fmt
             fmt.pb(avioCtx)
 
             // ---- 2. 打开 + 找视频流 ----
             var ret = avformat.avformat_open_input(fmt, null as String?, null, null)
-            if (ret < 0) throw IOException("avformat_open_input 失败($ret, AVERROR_${-ret})")
+            if (ret < 0) throw IOException("avformat_open_input failed ($ret, AVERROR_${-ret})")
             ret = avformat.avformat_find_stream_info(fmt, null as org.bytedeco.ffmpeg.avutil.AVDictionary?)
-            if (ret < 0) throw IOException("avformat_find_stream_info 失败($ret)")
+            if (ret < 0) throw IOException("avformat_find_stream_info failed ($ret)")
 
             val videoIdx = avformat.av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, null as AVCodec?, 0)
-            if (videoIdx < 0) throw IOException("未找到图片/视频流($videoIdx)")
-            val st = fmt.streams(videoIdx) ?: throw IOException("视频流不存在")
-            val par = st.codecpar() ?: throw IOException("缺少 codec 参数")
+            if (videoIdx < 0) throw IOException("No image/video stream found ($videoIdx)")
+            val st = fmt.streams(videoIdx) ?: throw IOException("Video stream does not exist")
+            val par = st.codecpar() ?: throw IOException("Missing codec parameters")
 
             // ---- 3. 启动解码器 ----
             val codec: AVCodec = avcodec.avcodec_find_decoder(par.codec_id())
-                ?: throw IOException("无可用解码器(codec_id=${par.codec_id()})")
-            val cc = avcodec.avcodec_alloc_context3(codec) ?: throw IOException("avcodec_alloc_context3 失败")
+                ?: throw IOException("No decoder available (codec_id=${par.codec_id()})")
+            val cc = avcodec.avcodec_alloc_context3(codec) ?: throw IOException("avcodec_alloc_context3 failed")
             codecCtx = cc
             ret = avcodec.avcodec_parameters_to_context(cc, par)
-            if (ret < 0) throw IOException("avcodec_parameters_to_context 失败($ret)")
+            if (ret < 0) throw IOException("avcodec_parameters_to_context failed ($ret)")
             ret = avcodec.avcodec_open2(cc, codec, null as org.bytedeco.ffmpeg.avutil.AVDictionary?)
-            if (ret < 0) throw IOException("avcodec_open2 失败($ret, AVERROR_${-ret})")
+            if (ret < 0) throw IOException("avcodec_open2 failed ($ret, AVERROR_${-ret})")
 
-            val pkt = avcodec.av_packet_alloc() ?: throw IOException("av_packet_alloc 失败")
+            val pkt = avcodec.av_packet_alloc() ?: throw IOException("av_packet_alloc failed")
             packet = pkt
-            val frm = avutil.av_frame_alloc() ?: throw IOException("av_frame_alloc 失败")
+            val frm = avutil.av_frame_alloc() ?: throw IOException("av_frame_alloc failed")
             frame = frm
 
             // ---- 4. 读第一帧(纯图片 1 帧;动图 / 多帧取首帧即返回) ----
@@ -165,7 +165,7 @@ object ImageDecoder {
                 }
                 val sr = avcodec.avcodec_send_packet(cc, pkt)
                 avcodec.av_packet_unref(pkt)
-                if (sr < 0 && sr != AVERROR_EAGAIN) throw IOException("avcodec_send_packet 失败($sr)")
+                if (sr < 0 && sr != AVERROR_EAGAIN) throw IOException("avcodec_send_packet failed ($sr)")
                 while (true) {
                     val rr = avcodec.avcodec_receive_frame(cc, frm)
                     if (rr == AVERROR_EAGAIN) break
@@ -208,12 +208,12 @@ object ImageDecoder {
         private fun convertToRgba(frm: AVFrame): RgbaImage {
             val w = frm.width()
             val h = frm.height()
-            if (w <= 0 || h <= 0) throw IOException("帧尺寸无效(w=$w h=$h)")
+            if (w <= 0 || h <= 0) throw IOException("Invalid frame dimensions (w=$w h=$h)")
             val srcFmt = frm.format()
             val dstFmt = avutil.av_get_pix_fmt("rgba")
-            if (dstFmt < 0) throw IOException("av_get_pix_fmt(rgba) 失败($dstFmt)")
+            if (dstFmt < 0) throw IOException("av_get_pix_fmt(rgba) failed ($dstFmt)")
             val sws = swscale.sws_getContext(w, h, srcFmt, w, h, dstFmt, SWS_BILINEAR, null, null, null as org.bytedeco.javacpp.DoublePointer?)
-                ?: throw IOException("sws_getContext 失败")
+                ?: throw IOException("sws_getContext failed")
             swsCtx = sws
 
             val planes = avutil.av_pix_fmt_count_planes(srcFmt).coerceAtLeast(1)
@@ -231,7 +231,7 @@ object ImageDecoder {
                     dst.put(0, out)
                     dstStride.put(0, w * 4)
                     val ret = swscale.sws_scale(sws, srcSlice, srcStride, 0, h, dst, dstStride)
-                    if (ret < 0) throw IOException("sws_scale 失败($ret)")
+                    if (ret < 0) throw IOException("sws_scale failed ($ret)")
                     val rgba = ByteArray(outSize.toInt())
                     out.get(rgba)
                     return RgbaImage(rgba, w, h)

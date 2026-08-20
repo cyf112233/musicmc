@@ -91,7 +91,7 @@ object NetMusic {
      */
     fun getLyrics(song: Song, callback: (List<LyricLine>, String?) -> Unit) {
         if (!config.lyricsEnabled) {
-            callback(emptyList(), "歌词功能已禁用")
+            callback(emptyList(), "Lyrics are disabled")
             return
         }
         LyricManager.load(song) { result, err ->

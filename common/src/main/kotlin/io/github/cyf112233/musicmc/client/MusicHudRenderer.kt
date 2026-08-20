@@ -56,7 +56,7 @@ object MusicHudRenderer {
     }
 
     private fun coverUrlTag(url: String?): String =
-        url?.let { if (it.length > 100) it.take(100) + "…" else it } ?: "(无封面)"
+        url?.let { if (it.length > 100) it.take(100) + "…" else it } ?: "(no cover)"
 
     /** 渲染入口(fabric HudElement / neoforge GuiLayer 每帧调用,delta 未使用故不接收) */
     fun onFrame(gui: HudGui) {

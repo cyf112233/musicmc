@@ -39,7 +39,7 @@ class FavFoldersFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "我的收藏夹"
+                text = "My Favorites"
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(dp(16f), dp(12f), dp(16f), dp(8f))
             },
@@ -47,7 +47,7 @@ class FavFoldersFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "加载中…"
+            text = "Loading…"
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(dp(16f), dp(16f), dp(16f), dp(16f))
@@ -67,22 +67,22 @@ class FavFoldersFragment : Fragment() {
     /** 加载收藏夹列表;未登录(入口已隐藏,防御性守卫)显示提示 */
     private fun load() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            statusText?.text = "请先在设置中登录 B 站"
+            statusText?.text = "Please log in to Bilibili in Settings first"
             statusText?.visibility = View.VISIBLE
             listView?.visibility = View.GONE
             return
         }
-        statusText?.text = "加载中…"
+        statusText?.text = "Loading…"
         BiliActions.folders { list, err ->
             if (!isAdded) return@folders
             if (err != null) {
-                statusText?.text = "加载失败: $err"
+                statusText?.text = "Failed to load: $err"
                 statusText?.visibility = View.VISIBLE
                 return@folders
             }
             folders = list.toMutableList()
             if (folders.isEmpty()) {
-                statusText?.text = "暂无收藏夹"
+                statusText?.text = "No favorites yet"
                 statusText?.visibility = View.VISIBLE
             } else {
                 statusText?.visibility = View.GONE

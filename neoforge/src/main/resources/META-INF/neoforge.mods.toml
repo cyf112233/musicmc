@@ -1,9 +1,10 @@
-# MusicMC — NeoForge mod 元数据。
+# MusicMC — NeoForge mod metadata.
 #
-# 格式对齐 ModernUI-NeoForge 26.1.2-3.13.0.5 jar 内的 neoforge.mods.toml(已 unzip 验证):
-#   modLoader="javafml" / loaderVersion="[2,)" / 顶层 license 字段 / description 用 ''' 多行串。
-# displayTest:ModernUI 官方 jar 未使用该字段(默认 IGNORE_ALL_VERSION),此处同样省略。
-# 版本信息硬编码(mod_version=0.1.0,由根 gradle.properties 维护,未做变量替换)。
+# Format aligned with the neoforge.mods.toml inside the ModernUI-NeoForge
+# 26.1.2-3.13.0.5 jar (verified by unzip): modLoader="javafml" /
+# loaderVersion="[2,)" / top-level license / ''' multiline description.
+# displayTest: not used (default IGNORE_ALL_VERSION), same as ModernUI official jar.
+# Version is hardcoded (mod_version=0.1.0, maintained in root gradle.properties).
 modLoader="javafml"
 loaderVersion="[2,)"
 license="GPL-3.0"
@@ -13,9 +14,9 @@ license="GPL-3.0"
     version="0.1.0"
     displayName="MusicMC"
     description='''
-    在 Minecraft 中听哔哩哔哩音乐。支持歌曲搜索、播放列表、歌词显示、
-    HUD 悬浮面板与本地配置管理。UI 自动选择已装的界面模组
-    (ModernUI / LDlib / 原版;Android 强制 LDlib)。
+    Listen to Bilibili music inside Minecraft. Song search, playlists,
+    lyrics, HUD overlay and local config management. The UI backend is
+    picked automatically (ModernUI / YACL; Android always uses YACL).
     '''
 
 [[dependencies.musicmc]]
@@ -32,7 +33,8 @@ license="GPL-3.0"
     ordering="NONE"
     side="BOTH"
 
-# ModernUI 为可选(装了用 ModernUI 界面;Android 上依赖 Java2D 不可用,自动降级)
+# ModernUI is optional (used when installed; not usable on Android since it
+# depends on Java2D, auto-falls back to YACL)
 [[dependencies.musicmc]]
     modId="modernui"
     type="optional"
@@ -40,8 +42,8 @@ license="GPL-3.0"
     ordering="AFTER"
     side="BOTH"
 
-# YACL 为运行期硬依赖(配置界面 + Android/fabric 无 ModernUI 时的现代化界面;
-# modId 以 YACL jar 内的 neoforge.mods.toml 为准)
+# YACL is a required runtime dependency (config screen + modern UI on
+# Android / Fabric without ModernUI; modId matches the YACL jar's toml)
 [[dependencies.musicmc]]
     modId="yet_another_config_lib_v3"
     type="required"

@@ -87,7 +87,7 @@ object AsyncImageLoader {
         } catch (e: Exception) {
             // 下载/解码失败:静默保留占位背景,日志带异常类名 + message 便于下次定位
             try {
-                NetMusic.logger.warn("图片加载失败: $url (${e.javaClass.simpleName}: ${e.message})")
+                NetMusic.logger.warn("Failed to load image: $url (${e.javaClass.simpleName}: ${e.message})")
             } catch (_: Exception) {
                 // 模块未初始化时静默
             }
@@ -128,7 +128,7 @@ object AsyncImageLoader {
         val out = Bitmap.createBitmap(w, h, Bitmap.Format.RGBA_8888)
         out.setPixels(pixels, 0, w, 0, 0, w, h)
         try {
-            NetMusic.logger.info("图片解码:BitmapFactory 失败,ImageIO 回退成功 ${w}x${h} url=$url")
+            NetMusic.logger.info("Image decode: BitmapFactory failed, ImageIO fallback succeeded ${w}x${h} url=$url")
         } catch (_: Exception) {
             // 模块未初始化时静默
         }

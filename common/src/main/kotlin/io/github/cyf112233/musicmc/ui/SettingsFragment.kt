@@ -61,7 +61,7 @@ class SettingsFragment : Fragment() {
 
         content.addView(
             TextView(context).apply {
-                text = "设置"
+                text = "Settings"
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(0, 0, 0, dp(16f))
             },
@@ -69,7 +69,7 @@ class SettingsFragment : Fragment() {
         )
 
         // 音源信息(唯一音源,不可切换)
-        content.addView(buildInfoRow(context, "音源", "哔哩哔哩(当前唯一音源)"), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        content.addView(buildInfoRow(context, "Source", "Bilibili (the only source)"), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
         // 歌词显示总开关(默认关;开启后播放页可查看歌词)
         val lyricsSwitch = Switch(context, null, R.attr.switchStyle).apply {
@@ -110,15 +110,15 @@ class SettingsFragment : Fragment() {
         }
 
         content.addView(
-            buildSwitchRow(context, "歌词显示(CC 字幕优先)", "歌词总开关:控制播放页 / HUD / 聊天栏所有歌词", lyricsSwitch),
+            buildSwitchRow(context, "Show Lyrics (CC subtitles first)", "Master switch for lyrics: controls all lyrics on the player page / HUD / chat", lyricsSwitch),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
         )
         content.addView(
-            buildSwitchRow(context, "无 CC 字幕时按标题匹配歌词", "网易云 → QQ音乐 → 酷狗,三源自动匹配,仅作歌词来源", fallbackSwitch),
+            buildSwitchRow(context, "Match lyrics by title when no CC subtitles", "NetEase Cloud → QQ Music → Kugou: auto-match from three sources, lyrics source only", fallbackSwitch),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
         )
         content.addView(
-            buildSwitchRow(context, "聊天栏歌词", "每句歌词同步输出到玩家聊天栏一条(♪ 前缀,需总开关开启)", chatLyricSwitch),
+            buildSwitchRow(context, "Chat Lyrics", "Output each lyric line to the player chat (♪ prefix, requires the master switch)", chatLyricSwitch),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
         )
 
@@ -129,13 +129,13 @@ class SettingsFragment : Fragment() {
         }
         hubSection.addView(
             TextView(context).apply {
-                text = "歌词 Hub 地址"
+                text = "Lyrics Hub URL"
                 setTextSize(15f)
             },
         )
         hubSection.addView(
             TextView(context).apply {
-                text = "自建歌词同步服务(http://主机:8787,留空不启用;协议见 hub/README.md)"
+                text = "Self-hosted lyrics sync service (http://host:8787, leave empty to disable; see hub/README.md)"
                 setTextSize(12f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             },
@@ -155,7 +155,7 @@ class SettingsFragment : Fragment() {
         hubRow.addView(hubInput, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         hubRow.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "保存"
+                text = "Save"
                 setOnClickListener { saveHubUrl(hubInput) }
             },
         )
@@ -169,19 +169,19 @@ class SettingsFragment : Fragment() {
         }
         cacheSection.addView(
             TextView(context).apply {
-                text = "音频缓存"
+                text = "Audio Cache"
                 setTextSize(15f)
             },
         )
         cacheSection.addView(
             TextView(context).apply {
-                text = "播放过的歌曲会缓存到本地,下次直接本地播放(离线可听)"
+                text = "Played songs are cached locally and play from local storage next time (works offline)"
                 setTextSize(12f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             },
         )
         val cacheSizeText = TextView(context).apply {
-            text = "占用:${formatCacheBytes(AudioCache.totalSize())}"
+            text = "Usage: ${formatCacheBytes(AudioCache.totalSize())}"
             setTextSize(13f)
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             setPadding(0, dp(6f), 0, dp(6f))
@@ -189,11 +189,11 @@ class SettingsFragment : Fragment() {
         cacheSection.addView(cacheSizeText)
         cacheSection.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "清除缓存"
+                text = "Clear Cache"
                 setOnClickListener {
                     val freed = AudioCache.clear()
-                    cacheSizeText.text = "占用:${formatCacheBytes(AudioCache.totalSize())}"
-                    Widgets.toast(context, "已清除缓存(${formatCacheBytes(freed)})")
+                    cacheSizeText.text = "Usage: ${formatCacheBytes(AudioCache.totalSize())}"
+                    Widgets.toast(context, "Cache cleared (${formatCacheBytes(freed)})")
                 }
             },
         )
@@ -206,13 +206,13 @@ class SettingsFragment : Fragment() {
         }
         hudSection.addView(
             TextView(context).apply {
-                text = "游戏内 HUD"
+                text = "In-Game HUD"
                 setTextSize(15f)
             },
         )
         hudSection.addView(
             TextView(context).apply {
-                text = "HUD 位置 / 形状等可在编辑器中实时拖动预览调整,完成后自动保存"
+                text = "HUD position / shape can be dragged and previewed live in the editor; saved automatically when done"
                 setTextSize(12f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             },
@@ -221,7 +221,7 @@ class SettingsFragment : Fragment() {
         // 打开 HUD 编辑器(独立 MUI 屏幕,loader 侧 setScreen 打开)
         hudSection.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "打开 HUD 编辑器(拖动预览调整位置)"
+                text = "Open HUD Editor (drag to adjust position)"
                 setOnClickListener {
                     PlatformHolder.require().openHudEditor()
                 }
@@ -237,13 +237,13 @@ class SettingsFragment : Fragment() {
             NetMusic.updateConfig { it.copy(hudEnabled = checked) }
         }
         hudSection.addView(
-            buildSwitchRow(context, "游戏内显示 HUD", "游戏中悬浮显示封面 / 歌词 / 进度", hudSwitch),
+            buildSwitchRow(context, "Show HUD In Game", "Floating cover / lyrics / progress in game", hudSwitch),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
         )
 
         // HUD 歌词显示开关(声明在歌词区,总开关联动可用性;此处仅渲染行)
         hudSection.addView(
-            buildSwitchRow(context, "HUD 显示歌词", "游戏中悬浮面板显示当前歌词(独立开关,不影响播放页)", hudLyricSwitch),
+            buildSwitchRow(context, "Show HUD Lyrics", "Show current lyrics in the in-game floating panel (independent switch; does not affect the player page)", hudLyricSwitch),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
         )
 
@@ -251,7 +251,7 @@ class SettingsFragment : Fragment() {
         val scaleText = TextView(context).apply {
             setTextSize(13f)
             setPadding(0, dp(6f), 0, 0)
-            text = "HUD 缩放: ${(NetMusic.config.hudScale * 100).toInt()}%"
+            text = "HUD Scale: ${(NetMusic.config.hudScale * 100).toInt()}%"
         }
         hudSection.addView(scaleText)
         val scaleSeek = SeekBar(context).apply {
@@ -260,7 +260,7 @@ class SettingsFragment : Fragment() {
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 // 实时性修复:去掉 fromUser 门控,拖动中实时 updateConfig(幂等无害)
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                    scaleText.text = "HUD 缩放: ${progress + 50}%"
+                    scaleText.text = "HUD Scale: ${progress + 50}%"
                     NetMusic.updateConfig { it.copy(hudScale = (progress + 50) / 100f) }
                 }
 
@@ -275,10 +275,10 @@ class SettingsFragment : Fragment() {
         // 重置 HUD 位置(默认锚点右下)
         hudSection.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "重置 HUD 位置"
+                text = "Reset HUD Position"
                 setOnClickListener {
                     NetMusic.updateConfig { it.copy(hudX = 0.92f, hudY = 0.86f) }
-                    Widgets.toast(context, "HUD 位置已重置")
+                    Widgets.toast(context, "HUD position reset")
                 }
             },
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
@@ -292,13 +292,13 @@ class SettingsFragment : Fragment() {
         }
         accountSection.addView(
             TextView(context).apply {
-                text = "B 站账号"
+                text = "Bilibili Account"
                 setTextSize(15f)
             },
         )
         accountSection.addView(
             TextView(context).apply {
-                text = "登录后可同步个性化搜索并降低风控;流优先级提升(dolby/flac)"
+                text = "Logging in enables personalized search and lowers risk control; stream priority boost (dolby/flac)"
                 setTextSize(12f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             },
@@ -309,7 +309,7 @@ class SettingsFragment : Fragment() {
         // 底部固定返回按钮(在 scroll 之外,始终可见)
         root.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "返回"
+                text = "Back"
                 setOnClickListener {
                     if (parentFragmentManager.backStackEntryCount > 0) {
                         runCatching { parentFragmentManager.popBackStack() }
@@ -330,7 +330,7 @@ class SettingsFragment : Fragment() {
     private fun saveHubUrl(input: EditText) {
         val url = input.text?.toString()?.trim().orEmpty()
         NetMusic.updateConfig { it.copy(hubUrl = url) }
-        Widgets.toast(requireContext(), "Hub 地址已保存")
+        Widgets.toast(requireContext(), "Hub URL saved")
     }
 
     /** B 站账号区内容(登录 / 未登录两种形态,退出登录后原地重建) */
@@ -338,7 +338,7 @@ class SettingsFragment : Fragment() {
         box.removeAllViews()
         if (NetMusic.bilibiliLoggedIn()) {
             val nameText = TextView(context).apply {
-                text = "昵称获取中…"
+                text = "Fetching nickname…"
                 setTextSize(14f)
                 setPadding(0, dp(4f), 0, dp(4f))
             }
@@ -347,15 +347,15 @@ class SettingsFragment : Fragment() {
                 val nick = NetMusic.bilibiliNickname()
                 Async.onUi {
                     if (!isAdded) return@onUi
-                    nameText.text = if (nick.isNullOrBlank()) "已登录(昵称获取失败)" else "已登录: $nick"
+                    nameText.text = if (nick.isNullOrBlank()) "Logged in (failed to fetch nickname)" else "Logged in: $nick"
                 }
             }
             box.addView(
                 Button(context, null, R.attr.buttonElevatedStyle).apply {
-                    text = "退出登录"
+                    text = "Log Out"
                     setOnClickListener {
                         NetMusic.setBilibiliCookie("")
-                        Widgets.toast(context, "已退出登录")
+                        Widgets.toast(context, "Logged out")
                         buildAccountSection(context, box)
                     }
                 },
@@ -364,7 +364,7 @@ class SettingsFragment : Fragment() {
         } else {
             box.addView(
                 Button(context, null, R.attr.buttonElevatedStyle).apply {
-                    text = "扫码登录 B 站"
+                    text = "Scan QR Code to Log In"
                     setOnClickListener { openBilibiliLogin() }
                 },
                 LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT),

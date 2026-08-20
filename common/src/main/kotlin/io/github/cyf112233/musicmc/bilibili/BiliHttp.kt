@@ -123,12 +123,12 @@ object BiliHttp {
         val response = passportGet("/x/passport-login/web/qrcode/generate", emptyMap())
         if (response.statusCode() !in 200..299) throw IOException("HTTP ${response.statusCode()} for ${response.uri()}")
         val element = JsonParser.parseString(response.body())
-        if (!element.isJsonObject) throw IOException("生成二维码响应异常")
+        if (!element.isJsonObject) throw IOException("Failed to generate QR code: response error")
         val json = element.asJsonObject
-        if (json.get("code").optInt() != 0) throw IOException("生成二维码失败(code=${json.get("code").optInt()})")
-        val data = json.optObject("data") ?: throw IOException("生成二维码失败:缺少 data")
-        val url = data.optString("url") ?: throw IOException("生成二维码失败:缺少 url")
-        val key = data.optString("qrcode_key") ?: throw IOException("生成二维码失败:缺少 qrcode_key")
+        if (json.get("code").optInt() != 0) throw IOException("Failed to generate QR code (code=${json.get("code").optInt()})")
+        val data = json.optObject("data") ?: throw IOException("Failed to generate QR code: missing data")
+        val url = data.optString("url") ?: throw IOException("Failed to generate QR code: missing url")
+        val key = data.optString("qrcode_key") ?: throw IOException("Failed to generate QR code: missing qrcode_key")
         return QrData(url, key)
     }
 
@@ -140,7 +140,7 @@ object BiliHttp {
         val response = passportGet("/x/passport-login/web/qrcode/poll", mapOf("qrcode_key" to key))
         if (response.statusCode() !in 200..299) throw IOException("HTTP ${response.statusCode()} for ${response.uri()}")
         val element = JsonParser.parseString(response.body())
-        if (!element.isJsonObject) throw IOException("轮询响应异常")
+        if (!element.isJsonObject) throw IOException("Polling response error")
         val json = element.asJsonObject
         val data = json.optObject("data")
         val code = data?.get("code")?.optInt() ?: -1
@@ -186,14 +186,14 @@ object BiliHttp {
                 "page_size" to limit.toString(),
             ),
         )
-        checkCode(json, "搜索")
+        checkCode(json, "Search")
         return json
     }
 
     /** 视频详情(第一 P 的 cid / 时长等) */
     fun view(bvid: String): JsonObject {
         val json = get("/x/web-interface/view", mapOf("bvid" to bvid))
-        checkCode(json, "视频信息")
+        checkCode(json, "Video info")
         return json
     }
 
@@ -217,7 +217,7 @@ object BiliHttp {
             // wbi 获取密钥失败等场景:回退未签名请求
             get("/x/player/wbi/playurl", params)
         }
-        checkCode(json, "播放地址")
+        checkCode(json, "Play URL")
         return json
     }
 
@@ -232,7 +232,7 @@ object BiliHttp {
         } catch (e: Exception) {
             get("/x/player/wbi/v2", params)
         }
-        checkCode(json, "字幕信息")
+        checkCode(json, "Subtitle info")
         return json
     }
 
@@ -253,14 +253,14 @@ object BiliHttp {
             throw IOException("HTTP ${response.statusCode()} for $url")
         }
         val element = JsonParser.parseString(response.body())
-        if (!element.isJsonObject) throw IOException("字幕内容不是 JSON 对象: $url")
+        if (!element.isJsonObject) throw IOException("Subtitle content is not a JSON object: $url")
         return element.asJsonObject
     }
 
     /** 排行榜(rid:1=全站 3=音乐 5=娱乐 129=舞蹈 4=游戏 等,2026-08 实测均可用) */
     fun ranking(rid: String): JsonObject {
         val json = get("/x/web-interface/ranking/v2", mapOf("rid" to rid))
-        checkCode(json, "排行榜")
+        checkCode(json, "Rankings")
         return json
     }
 
@@ -289,10 +289,10 @@ object BiliHttp {
         val json = try {
             get("/x/web-interface/archive/has/like", mapOf("bvid" to bvid))
         } catch (e: Exception) {
-            cb(false, e.message ?: "查询点赞状态失败")
+            cb(false, e.message ?: "Failed to check like status")
             return
         }
-        codeError(json, "查询点赞状态")?.let { cb(false, it); return }
+        codeError(json, "Check like status")?.let { cb(false, it); return }
         cb(json.get("data").optInt() == 1, null)
     }
 
@@ -303,19 +303,19 @@ object BiliHttp {
      */
     fun like(bvid: String, like: Boolean, cb: (String?) -> Unit) {
         val token = csrf()
-        if (token.isNullOrBlank()) { cb("请先在设置中登录 B 站"); return }
+        if (token.isNullOrBlank()) { cb("Please log in to Bilibili in Settings first"); return }
         val json = try {
             post(
                 "/x/web-interface/archive/like",
                 mapOf("bvid" to bvid, "like" to if (like) "1" else "2", "csrf" to token),
             )
         } catch (e: Exception) {
-            cb(e.message ?: "点赞失败")
+            cb(e.message ?: "Failed to like")
             return
         }
         val code = json.get("code").optInt()
         if (code == 0 || code == 65006) cb(null)
-        else cb(codeError(json, "点赞") ?: "点赞失败")
+        else cb(codeError(json, "Like") ?: "Failed to like")
     }
 
     /**
@@ -334,10 +334,10 @@ object BiliHttp {
         val json = try {
             get("/x/v3/fav/folder/created/list-all", params)
         } catch (e: Exception) {
-            cb(emptyList(), e.message ?: "获取收藏夹失败")
+            cb(emptyList(), e.message ?: "Failed to fetch favorites")
             return
         }
-        codeError(json, "获取收藏夹")?.let { cb(emptyList(), it); return }
+        codeError(json, "Fetch favorites")?.let { cb(emptyList(), it); return }
         // 匿名时 data=null(code=0),optObject 返回 null → 空列表
         val list = json.optObject("data")?.optArray("list") ?: JsonArray()
         val folders = list.mapNotNull { e ->
@@ -375,10 +375,10 @@ object BiliHttp {
                 ),
             )
         } catch (e: Exception) {
-            cb(emptyList(), e.message ?: "获取收藏内容失败")
+            cb(emptyList(), e.message ?: "Failed to fetch folder contents")
             return
         }
-        codeError(json, "获取收藏内容")?.let { cb(emptyList(), it); return }
+        codeError(json, "Fetch folder contents")?.let { cb(emptyList(), it); return }
         val medias = json.optObject("data")?.optArray("medias") ?: JsonArray()
         val songs = medias.mapNotNull { e ->
             if (e.isJsonObject) {
@@ -387,9 +387,9 @@ object BiliHttp {
                 val cover = o.optString("cover")
                 Song(
                     id = bvid,
-                    title = o.optString("title") ?: "未知视频",
+                    title = o.optString("title") ?: "Unknown video",
                     artist = o.optObject("upper")?.optString("name") ?: "",
-                    album = "哔哩哔哩",
+                    album = "Bilibili",
                     picUrl = if (cover != null && cover.startsWith("//")) "https:$cover" else cover,
                     durationMs = (o.get("duration").optInt().coerceAtLeast(0)) * 1000,
                 )
@@ -404,19 +404,19 @@ object BiliHttp {
      */
     fun favCreateFolder(title: String, cb: (Long?, String?) -> Unit) {
         val token = csrf()
-        if (token.isNullOrBlank()) { cb(null, "请先在设置中登录 B 站"); return }
+        if (token.isNullOrBlank()) { cb(null, "Please log in to Bilibili in Settings first"); return }
         val json = try {
             post("/x/v3/fav/folder/add", mapOf("title" to title, "csrf" to token))
         } catch (e: Exception) {
-            cb(null, e.message ?: "新建收藏夹失败")
+            cb(null, e.message ?: "Failed to create folder")
             return
         }
         val code = json.get("code").optInt()
         if (code == 0) {
             val fid = json.optObject("data")?.get("fid").optLong()
-            if (fid > 0) cb(fid, null) else cb(null, "新建收藏夹失败:响应缺少 fid")
+            if (fid > 0) cb(fid, null) else cb(null, "Failed to create folder: response missing fid")
         } else {
-            cb(null, codeError(json, "新建收藏夹") ?: "新建收藏夹失败")
+            cb(null, codeError(json, "Create folder") ?: "Failed to create folder")
         }
     }
 
@@ -426,7 +426,7 @@ object BiliHttp {
      */
     fun favAdd(aid: Long, fid: Long, cb: (String?) -> Unit) {
         val token = csrf()
-        if (token.isNullOrBlank()) { cb("请先在设置中登录 B 站"); return }
+        if (token.isNullOrBlank()) { cb("Please log in to Bilibili in Settings first"); return }
         val json = try {
             post(
                 "/x/v3/fav/resource/deal",
@@ -438,13 +438,13 @@ object BiliHttp {
                 ),
             )
         } catch (e: Exception) {
-            cb(e.message ?: "收藏失败")
+            cb(e.message ?: "Failed to add favorite")
             return
         }
         when (val code = json.get("code").optInt()) {
             0 -> cb(null)
-            90022 -> cb("已在该收藏夹")
-            else -> cb(codeError(json, "收藏") ?: "收藏失败")
+            90022 -> cb("Already in this folder")
+            else -> cb(codeError(json, "Add favorite") ?: "Failed to add favorite")
         }
     }
 
@@ -454,7 +454,7 @@ object BiliHttp {
      */
     fun favDel(rid: Long, fid: Long, cb: (String?) -> Unit) {
         val token = csrf()
-        if (token.isNullOrBlank()) { cb("请先在设置中登录 B 站"); return }
+        if (token.isNullOrBlank()) { cb("Please log in to Bilibili in Settings first"); return }
         val json = try {
             post(
                 "/x/v3/fav/resource/deal",
@@ -466,11 +466,11 @@ object BiliHttp {
                 ),
             )
         } catch (e: Exception) {
-            cb(e.message ?: "取消收藏失败")
+            cb(e.message ?: "Failed to remove favorite")
             return
         }
         val code = json.get("code").optInt()
-        if (code == 0) cb(null) else cb(codeError(json, "取消收藏") ?: "取消收藏失败")
+        if (code == 0) cb(null) else cb(codeError(json, "Remove favorite") ?: "Failed to remove favorite")
     }
 
     // ---------------- 内部实现 ----------------
@@ -503,7 +503,7 @@ object BiliHttp {
             throw IOException("HTTP ${response.statusCode()} for $url")
         }
         val element = JsonParser.parseString(response.body())
-        if (!element.isJsonObject) throw IOException("响应不是 JSON 对象: $url")
+        if (!element.isJsonObject) throw IOException("Response is not a JSON object: $url")
         return element.asJsonObject
     }
 
@@ -529,7 +529,7 @@ object BiliHttp {
             throw IOException("HTTP ${response.statusCode()} for $url")
         }
         val element = JsonParser.parseString(response.body())
-        if (!element.isJsonObject) throw IOException("响应不是 JSON 对象: $url")
+        if (!element.isJsonObject) throw IOException("Response is not a JSON object: $url")
         return element.asJsonObject
     }
 
@@ -562,7 +562,7 @@ object BiliHttp {
         val imgUrl = wbiImg?.optString("img_url")
         val subUrl = wbiImg?.optString("sub_url")
         if (imgUrl.isNullOrBlank() || subUrl.isNullOrBlank()) {
-            throw IOException("获取 wbi 密钥失败:响应缺少 wbi_img")
+            throw IOException("Failed to get wbi key: response missing wbi_img")
         }
         wbiImgKey = filenameWithoutExtension(imgUrl)
         wbiSubKey = filenameWithoutExtension(subUrl)
@@ -620,7 +620,7 @@ object BiliHttp {
         val code = json.get("code").takeIf { it.isJsonPrimitive }?.asInt ?: -1
         if (code != 0) {
             val msg = json.get("message").takeIf { it.isJsonPrimitive }?.asString
-            throw IOException("${what}失败(code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}")
+            throw IOException("${what} failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}")
         }
     }
 
@@ -632,7 +632,7 @@ object BiliHttp {
         val code = json.get("code").takeIf { it.isJsonPrimitive }?.asInt ?: -1
         if (code == 0) return null
         val msg = json.get("message").takeIf { it.isJsonPrimitive }?.asString
-        return "${what}失败(code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}"
+        return "${what} failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}"
     }
 
     private fun filenameWithoutExtension(url: String): String =

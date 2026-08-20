@@ -1,8 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
-import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.RowCoverCache
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.ui.Widgets
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -10,10 +11,10 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
 
 /**
- * YACL 版队列页:展示当前播放队列(NetMusic.player.queue),
+ * YACL 版队列页:展示当前Queue(NetMusic.player.queue),
  * 点击行从该位置播放,支持切换循环模式与清空队列;视觉走 YaclTheme。
  */
-class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播放队列")) {
+class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("Queue")) {
 
     private val player get() = NetMusic.player
 
@@ -32,21 +33,22 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
 
         // 顶部:返回 + 标题 + 模式 + 清空
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
-        YaclTheme.drawCenteredTitle(g, "播放队列", w / 2, 10)
-        val modeLabel = "循环:" + Widgets.playModeLabel(player.mode)
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        YaclTheme.drawCenteredTitle(g, "Queue", w / 2, 10)
+        val modeLabel = "Mode: " + Widgets.playModeLabel(player.mode)
         rectModeBtn.x1 = w - 150; rectModeBtn.y1 = 10; rectModeBtn.x2 = w - 90; rectModeBtn.y2 = 26
         YaclTheme.drawBtn(g, rectModeBtn, modeLabel, mouseX, mouseY)
         rectClearBtn.x1 = w - 82; rectClearBtn.y1 = 10; rectClearBtn.x2 = w - 12; rectClearBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectClearBtn, "清空", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectClearBtn, "Clear", mouseX, mouseY)
 
+        RowCoverCache.pump()
         // 列表
         val queue = player.queue
         if (queue.isEmpty()) {
-            g.drawText("队列为空,去搜索页点一首歌即可加入", w / 2 - 130, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("Queue is empty. Pick a song from Search to add it", w / 2 - 130, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
-        val rowH = 20
+        val rowH = 24
         val listX = 12
         val listW = w - 24
         var idx = scroll
@@ -54,7 +56,8 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
         val currentId = player.current?.id
         while (idx < queue.size && y + rowH < h - 8) {
             val song = queue[idx]
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY)
+            RowCoverCache.request(song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
             y += rowH
             idx++
         }
@@ -71,7 +74,7 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
         if (rectClearBtn.hit(x, y)) { player.clearQueue(); return true }
         val queue = player.queue
         if (queue.isNotEmpty()) {
-            val rowH = 20
+            val rowH = 24
             val listX = 12
             val listW = width - 24
             if (x >= listX && x < listX + listW && y >= 40) {
@@ -86,7 +89,7 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        val rowH = 20
+        val rowH = 24
         val maxScroll = (player.queue.size - (height - 40) / rowH).coerceAtLeast(0)
         scroll = (scroll - dy.toInt()).coerceIn(0, maxScroll)
         return true

@@ -52,7 +52,7 @@ class FavFolderDetailFragment : Fragment() {
         )
         root.addView(
             TextView(context).apply {
-                text = "${folder.mediaCount} 个内容"
+                text = "${folder.mediaCount} items"
                 setTextSize(13f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
                 setPadding(dp(16f), 0, dp(16f), dp(8f))
@@ -61,7 +61,7 @@ class FavFolderDetailFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "加载中…"
+            text = "Loading…"
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(dp(16f), dp(16f), dp(16f), dp(16f))
@@ -92,10 +92,10 @@ class FavFolderDetailFragment : Fragment() {
             if (!isAdded) return@folderSongs
             if (err != null) {
                 if (songs.isEmpty()) {
-                    statusText?.text = "加载失败: $err"
+                    statusText?.text = "Failed to load: $err"
                     statusText?.visibility = View.VISIBLE
                 } else {
-                    Widgets.toast(requireContext(), "加载更多失败: $err")
+                    Widgets.toast(requireContext(), "Failed to load more: $err")
                 }
                 return@folderSongs
             }
@@ -109,7 +109,7 @@ class FavFolderDetailFragment : Fragment() {
     private fun bind() {
         if (!isAdded) return
         if (songs.isEmpty()) {
-            statusText?.text = "收藏夹为空"
+            statusText?.text = "Folder is empty"
             statusText?.visibility = View.VISIBLE
             return
         }

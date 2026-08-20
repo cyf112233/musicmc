@@ -1,8 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
-import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.RowCoverCache
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Playlist
 import io.github.cyf112233.musicmc.model.Song
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -11,13 +12,13 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
 
 /**
- * YACL 版歌单详情页:加载歌单歌曲(NetMusic.source.playlistDetail),
+ * YACL 版Playlist详情页:加载Playlist歌曲(NetMusic.source.playlistDetail),
  * 点击行从该位置播放整单;顶部「播放全部」;视觉走 YaclTheme。
  */
 class YaclPlaylistScreen(
     private val playlist: Playlist,
     private val back: Screen,
-) : Screen(Component.literal("歌单")) {
+) : Screen(Component.literal("Playlist")) {
 
     private val player get() = NetMusic.player
 
@@ -52,26 +53,27 @@ class YaclPlaylistScreen(
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
-        val title = playlist.name.ifBlank { "未命名歌单" }
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        val title = playlist.name.ifBlank { "Unnamed playlist" }
         YaclTheme.drawCenteredTitle(g, title, w / 2, 10)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectPlayAllBtn, "播放全部", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectPlayAllBtn, "Play All", mouseX, mouseY, accent = true)
 
         val list = songs
         if (list == null && error == null) {
-            g.drawText("加载歌曲中…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("Loading songs…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
-            g.drawText("加载失败:$error", w / 2 - 100, h / 2 - 16, 11f, 1f, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
             return
         }
         if (list!!.isEmpty()) {
-            g.drawText("歌单暂无歌曲", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("No songs in this playlist", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
-        val rowH = 20
+RowCoverCache.pump()
+        val rowH = 24
         val listX = 12
         val listW = w - 24
         val currentId = player.current?.id
@@ -79,7 +81,8 @@ class YaclPlaylistScreen(
         var y = 40
         while (idx < list.size && y + rowH < h - 8) {
             val song = list[idx]
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY)
+            RowCoverCache.request(song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
             y += rowH
             idx++
         }
@@ -98,9 +101,10 @@ class YaclPlaylistScreen(
             return true
         }
         if (list.isNotEmpty()) {
-            val rowH = 20
+            val rowH = 24
             val listX = 12
-            if (x >= listX && x < listX + 360 && y >= 40) {
+            val listW = width - 24
+            if (x >= listX && x < listX + listW && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
                     player.play(list[row], list, row)
@@ -112,7 +116,7 @@ class YaclPlaylistScreen(
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        val rowH = 20
+        val rowH = 24
         val maxScroll = ((songs?.size ?: 0) - (height - 40) / rowH).coerceAtLeast(0)
         scroll = (scroll - dy.toInt()).coerceIn(0, maxScroll)
         return true

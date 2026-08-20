@@ -64,10 +64,10 @@ object Widgets {
 
     /** 播放模式中文文案 */
     fun playModeLabel(mode: PlayMode): String = when (mode) {
-        PlayMode.SEQUENCE -> "顺序"
-        PlayMode.LOOP_ALL -> "列表循环"
-        PlayMode.LOOP_ONE -> "单曲循环"
-        PlayMode.SHUFFLE -> "随机"
+        PlayMode.SEQUENCE -> "Sequence"
+        PlayMode.LOOP_ALL -> "Loop All"
+        PlayMode.LOOP_ONE -> "Loop One"
+        PlayMode.SHUFFLE -> "Shuffle"
     }
 
     /** 弹 Toast(包 try/catch:Fragment 已销毁等时机弹窗可能失败,静默即可) */

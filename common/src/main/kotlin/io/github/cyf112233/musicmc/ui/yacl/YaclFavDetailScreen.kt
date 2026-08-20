@@ -3,8 +3,9 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
-import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.RowCoverCache
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Song
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -12,13 +13,13 @@ import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
 
 /**
- * YACL 版收藏夹详情页:按页(BiliActions.folderSongs,ps=20)加载收藏夹内视频,
+ * YACL 版Favorites详情页:按页(BiliActions.folderSongs,ps=20)加载Favorites内视频,
  * 点击行从该位置播放整夹;「加载更多」翻页追加;视觉走 YaclTheme。
  */
 class YaclFavDetailScreen(
     private val folder: FavFolder,
     private val back: Screen,
-) : Screen(Component.literal("收藏夹")) {
+) : Screen(Component.literal("Favorites")) {
 
     private val player get() = NetMusic.player
 
@@ -62,25 +63,26 @@ class YaclFavDetailScreen(
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
-        val title = folder.title.ifBlank { "未命名收藏夹" }
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        val title = folder.title.ifBlank { "UnnamedFavorites" }
         YaclTheme.drawCenteredTitle(g, title, w / 2, 10)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectPlayAllBtn, "播放全部", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectPlayAllBtn, "Play All", mouseX, mouseY, accent = true)
 
         if (songs.isEmpty() && loading) {
-            g.drawText("加载中…", w / 2 - 40, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("Loading…", w / 2 - 40, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null && songs.isEmpty()) {
-            g.drawText("加载失败:$error", w / 2 - 100, h / 2 - 16, 11f, 1f, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
             return
         }
         if (songs.isEmpty()) {
-            g.drawText("收藏夹暂无内容", w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("This folder is empty", w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
-        val rowH = 20
+RowCoverCache.pump()
+        val rowH = 24
         val listX = 12
         val listW = w - 24
         val currentId = player.current?.id
@@ -88,7 +90,8 @@ class YaclFavDetailScreen(
         var y = 40
         while (idx < songs.size && y + rowH < h - 32) {
             val song = songs[idx]
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY)
+            RowCoverCache.request(song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
             y += rowH
             idx++
         }
@@ -96,7 +99,7 @@ class YaclFavDetailScreen(
         if (!allLoaded) {
             rectMoreBtn.x1 = w / 2 - 50; rectMoreBtn.y1 = h - 24
             rectMoreBtn.x2 = w / 2 + 50; rectMoreBtn.y2 = h - 8
-            YaclTheme.drawBtn(g, rectMoreBtn, if (loading) "加载中…" else "加载更多", mouseX, mouseY)
+            YaclTheme.drawBtn(g, rectMoreBtn, if (loading) "Loading…" else "Load More", mouseX, mouseY)
         } else if (songs.size > (h - 40) / rowH) {
             YaclTheme.drawScrollHint(g, w, h)
         }
@@ -112,9 +115,10 @@ class YaclFavDetailScreen(
         }
         if (rectMoreBtn.hit(x, y) && !allLoaded) { loadMore(); return true }
         if (songs.isNotEmpty()) {
-            val rowH = 20
+            val rowH = 24
             val listX = 12
-            if (x >= listX && x < listX + 360 && y >= 40) {
+            val listW = width - 24
+            if (x >= listX && x < listX + listW && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in songs.indices) {
                     player.play(songs[row], songs.toList(), row)
@@ -126,7 +130,7 @@ class YaclFavDetailScreen(
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        val rowH = 20
+        val rowH = 24
         val maxScroll = (songs.size - (height - 40) / rowH).coerceAtLeast(0)
         scroll = (scroll - dy.toInt()).coerceIn(0, maxScroll)
         return true

@@ -18,7 +18,7 @@ import net.minecraft.network.chat.Component
  * 面板预览简化自 MusicHudRenderer 布局(封面占位 + 歌名 + 进度条);
  * 拖动时面板跟随鼠标,所见即所得。
  */
-class YaclHudEditorScreen : Screen(Component.literal("HUD 编辑器")) {
+class YaclHudEditorScreen : Screen(Component.literal("HUD Editor")) {
 
     private val config get() = NetMusic.config
 
@@ -62,18 +62,27 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD 编辑器")) {
             g.fill(px + 4, py + 4, px + 4 + coverSize, py + 4 + coverSize, YaclTheme.colorBtn)
         }
 
-        // 文本预览(歌名 + 状态)
+        // 文本预览(歌名 + 状态;超出面板宽度截断)
         val song = NetMusic.player.current
         val textX = px + 4 + coverSize + 6
-        g.drawText(song?.title?.ifBlank { "未知标题" } ?: "未在播放", textX, py + 4, (10 * scale).coerceAtLeast(6f), 1f, YaclTheme.colorTextMain)
+        val titleMaxW = (px + panelW - 4 - textX).coerceAtLeast(40)
+        YaclTheme.drawTextClipped(
+            g,
+            song?.title?.ifBlank { "Unknown" } ?: "Not Playing",
+            textX,
+            py + 4,
+            (10 * scale).coerceAtLeast(6f),
+            titleMaxW,
+            YaclTheme.colorTextMain,
+        )
         val stateText = when (NetMusic.player.state) {
-            PlayerState.PLAYING -> "播放中"
-            PlayerState.PAUSED -> "已暂停"
-            PlayerState.LOADING -> "加载中…"
-            PlayerState.ERROR -> "播放出错"
-            else -> "未播放"
+            PlayerState.PLAYING -> "Playing"
+            PlayerState.PAUSED -> "Paused"
+            PlayerState.LOADING -> "Loading…"
+            PlayerState.ERROR -> "Playback Error"
+            else -> "Idle"
         }
-        g.drawText(stateText, textX, py + 4 + (16 * scale).toInt(), (8 * scale).coerceAtLeast(5f), 1f, YaclTheme.colorAccentBright)
+        YaclTheme.drawTextClipped(g, stateText, textX, py + 4 + (16 * scale).toInt(), (8 * scale).coerceAtLeast(5f), titleMaxW, YaclTheme.colorAccentBright)
 
         // 进度条预览
         val barY = py + panelH - (16 * scale).toInt()
@@ -86,14 +95,15 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD 编辑器")) {
         val fillW = (barW * progress).toInt()
         if (fillW > 0) g.fill(px + 4, barY, px + 4 + fillW, barY + barH, YaclTheme.colorAccent)
 
-        // 顶部提示 + 缩放显示
-        g.drawText("拖动面板调整位置 · 滚轮缩放 · 位置:${(curX * 100).toInt()}%,${(curY * 100).toInt()}% · 缩放:${(scale * 100).toInt()}%", 12, 10, 11f, 1f, YaclTheme.colorTextSub)
+        // 顶部提示 + 缩放显示(长文本按屏宽截断,不溢出屏幕)
+        val hint = "Drag to move · Scroll to scale · Pos: ${(curX * 100).toInt()}%,${(curY * 100).toInt()}% · Scale: ${(scale * 100).toInt()}%"
+        YaclTheme.drawTextClipped(g, hint, 12, 10, 11f, w - 24, YaclTheme.colorTextSub)
 
         // 按钮:重置 / 完成
         rectReset.set(w - 160, h - 30, w - 86, h - 8)
         rectDone.set(w - 78, h - 30, w - 12, h - 8)
-        YaclTheme.drawBtn(g, rectReset, "重置位置", mouseX, mouseY)
-        YaclTheme.drawBtn(g, rectDone, "完成", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectReset, "Reset Pos", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectDone, "Done", mouseX, mouseY, accent = true)
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {

@@ -64,7 +64,7 @@ object Http {
     private fun parseJson(body: String, url: String): JsonObject {
         val element = JsonParser.parseString(body)
         return if (element.isJsonObject) element.asJsonObject
-        else throw IOException("响应不是 JSON 对象: $url")
+        else throw IOException("Response is not a JSON object: $url")
     }
 
     /** 基础请求头;referer 非空时覆盖默认 Referer;extraHeaders 覆盖同名头(如歌词源的专属 UA) */
@@ -212,7 +212,7 @@ object Http {
             416 -> {
                 // 先关掉响应体再抛,避免泄漏连接
                 runCatching { response.body().close() }
-                throw IOException("范围越界")
+                throw IOException("Range out of bounds")
             }
             else -> {
                 runCatching { response.body().close() }

@@ -50,7 +50,7 @@ class BilibiliLoginFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "B 站登录"
+                text = "Bilibili Login"
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(0, 0, 0, dp(16f))
             },
@@ -67,7 +67,7 @@ class BilibiliLoginFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "正在生成二维码…"
+            text = "Generating QR code…"
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(0, dp(16f), 0, dp(8f))
@@ -77,7 +77,7 @@ class BilibiliLoginFragment : Fragment() {
 
         root.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "刷新二维码"
+                text = "Refresh QR Code"
                 setOnClickListener { startLogin() }
             },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT),
@@ -96,7 +96,7 @@ class BilibiliLoginFragment : Fragment() {
     /** 生成二维码并启动 2s 轮询(新会话 generation 自增,旧会话作废) */
     private fun startLogin() {
         val gen = ++generation
-        statusText?.text = "正在生成二维码…"
+        statusText?.text = "Generating QR code…"
         Async.executor.execute {
             try {
                 val qr = BiliHttp.qrGenerate()
@@ -114,7 +114,7 @@ class BilibiliLoginFragment : Fragment() {
             } catch (e: Exception) {
                 Async.onUi {
                     if (gen != generation || !isAdded) return@onUi
-                    statusText?.text = "生成二维码失败: ${e.message ?: "网络错误"}"
+                    statusText?.text = "Failed to generate QR code: ${e.message ?: "network error"}"
                 }
             }
         }
@@ -135,11 +135,11 @@ class BilibiliLoginFragment : Fragment() {
                             if (gen != generation || !isAdded) return@onUi
                             val cookie = result.cookieHeader
                             if (cookie.isNullOrBlank()) {
-                                statusText?.text = "登录失败:未获取到登录 Cookie"
+                                statusText?.text = "Login failed: no login cookie obtained"
                             } else {
                                 NetMusic.setBilibiliCookie(cookie)
-                                statusText?.text = "登录成功"
-                                Widgets.toast(requireContext(), "登录成功")
+                                statusText?.text = "Login successful"
+                                Widgets.toast(requireContext(), "Login successful")
                                 refreshNickname()
                                 runCatching { parentFragmentManager.popBackStack() }
                             }
@@ -149,26 +149,26 @@ class BilibiliLoginFragment : Fragment() {
                     QrStatus.EXPIRED -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "二维码已过期,请点击刷新"
+                            statusText?.text = "QR code expired, please refresh"
                         }
                         return@execute
                     }
                     QrStatus.SCANNED -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "已扫码,请在手机上确认"
+                            statusText?.text = "Scanned, please confirm on your phone"
                         }
                     }
                     QrStatus.WAIT -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "等待扫码…"
+                            statusText?.text = "Waiting for scan…"
                         }
                     }
                     null -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "轮询失败,自动重试…"
+                            statusText?.text = "Polling failed, retrying automatically…"
                         }
                     }
                 }
@@ -187,7 +187,7 @@ class BilibiliLoginFragment : Fragment() {
             val nick = NetMusic.bilibiliNickname()
             Async.onUi {
                 if (!isAdded) return@onUi
-                statusText?.text = if (nick.isNullOrBlank()) "登录成功" else "登录成功($nick)"
+                statusText?.text = if (nick.isNullOrBlank()) "Login successful" else "Login successful ($nick)"
             }
         }
     }

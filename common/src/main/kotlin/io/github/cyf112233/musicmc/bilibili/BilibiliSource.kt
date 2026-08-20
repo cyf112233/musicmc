@@ -29,21 +29,21 @@ class BilibiliSource(
 ) : MusicSource {
 
     override val id: String = "bilibili"
-    override val displayName: String = "哔哩哔哩"
+    override val displayName: String = "Bilibili"
 
     /** 首页固定排行榜(rid 已实测可用:/x/web-interface/ranking/v2?rid=1/3/5 均返回 code=0) */
     private val homeRanks = listOf(
-        Playlist("1", "全站排行榜", null, emptyList()),
-        Playlist("3", "音乐排行榜", null, emptyList()),
-        Playlist("5", "娱乐排行榜", null, emptyList()),
+        Playlist("1", "Overall Rankings", null, emptyList()),
+        Playlist("3", "Music Rankings", null, emptyList()),
+        Playlist("5", "Entertainment Rankings", null, emptyList()),
     )
 
     private val rankNames = mapOf(
-        "1" to "全站排行榜",
-        "3" to "音乐排行榜",
-        "5" to "娱乐排行榜",
-        "129" to "舞蹈排行榜",
-        "4" to "游戏排行榜",
+        "1" to "Overall Rankings",
+        "3" to "Music Rankings",
+        "5" to "Entertainment Rankings",
+        "129" to "Dance Rankings",
+        "4" to "Game Rankings",
     )
 
     // ---------------- search ----------------
@@ -61,7 +61,7 @@ class BilibiliSource(
                 }
                 callback(songs, null)
             } catch (e: Exception) {
-                callback(emptyList(), e.message ?: "网络错误")
+                callback(emptyList(), e.message ?: "Network error")
             }
         }
     }
@@ -74,18 +74,18 @@ class BilibiliSource(
                 val bvid = song.id
                 // 1) view 取第一 P cid
                 val view = BiliHttp.view(bvid)
-                val data = view.optObject("data") ?: throw IOException("视频信息为空")
+                val data = view.optObject("data") ?: throw IOException("Video info is empty")
                 val cid = data.get("cid").optLong()
-                if (cid <= 0) throw IOException("视频信息缺少 cid")
+                if (cid <= 0) throw IOException("Video info missing cid")
                 // 2) playurl 取 DASH 音频流
                 val pl = BiliHttp.playurl(bvid, cid.toString())
                 val dash = pl.optObject("data")?.optObject("dash")
-                    ?: throw IOException("该视频无独立音频流")
+                    ?: throw IOException("No standalone audio stream for this video")
                 val audios = dash.optArray("audio") ?: JsonArray()
-                if (audios.size() == 0) throw IOException("该视频无独立音频流")
+                if (audios.size() == 0) throw IOException("No standalone audio stream for this video")
                 val selected = pickAudio(dash, audios)
                 val baseUrl = selected.optString("baseUrl")
-                if (baseUrl.isNullOrBlank()) throw IOException("播放地址为空")
+                if (baseUrl.isNullOrBlank()) throw IOException("Play URL is empty")
                 val backups = selected.optArray("backupUrl")?.mapNotNull { it.asString } ?: emptyList()
                 callback(
                     SongUrl(
@@ -96,7 +96,7 @@ class BilibiliSource(
                     null,
                 )
             } catch (e: Exception) {
-                callback(null, e.message ?: "播放失败")
+                callback(null, e.message ?: "Playback failed")
             }
         }
     }
@@ -133,15 +133,15 @@ class BilibiliSource(
                 val bvid = songId
                 // 1) view 取第一 P cid
                 val view = BiliHttp.view(bvid)
-                val data = view.optObject("data") ?: throw IOException("视频信息为空")
+                val data = view.optObject("data") ?: throw IOException("Video info is empty")
                 val cid = data.get("cid").optLong()
-                if (cid <= 0) throw IOException("视频信息缺少 cid")
+                if (cid <= 0) throw IOException("Video info missing cid")
                 // 2) 字幕列表(防御:data.subtitle 恒为对象,subtitles 可能为 null/空数组)
                 val subtitles = BiliHttp.subtitle(bvid, cid.toString())
                     .optObject("data")?.optObject("subtitle")?.optArray("subtitles")
                     ?: JsonArray()
                 if (subtitles.size() == 0) {
-                    callback(emptyList(), "该视频无 CC 字幕")
+                    callback(emptyList(), "No CC subtitles for this video")
                     return@execute
                 }
                 // 3) 中文优先,否则第一项
@@ -154,7 +154,7 @@ class BilibiliSource(
                     } else false
                 } ?: subtitles.get(0)).asJsonObject
                 val rawUrl = selected.optString("subtitle_url")
-                    ?: throw IOException("字幕地址为空")
+                    ?: throw IOException("Subtitle URL is empty")
                 // 4) 拉取字幕 JSON(subtitle_url 可能为协议相对 // 或绝对路径 /x/...)
                 val subJson = BiliHttp.subtitleContent(normalizeSubtitleUrl(rawUrl))
                 // 5) body[] → LyricLine。from 以秒为单位(实测文档形态;个别可能为毫秒,
@@ -173,7 +173,7 @@ class BilibiliSource(
                 }
                 callback(lines, null)
             } catch (e: Exception) {
-                callback(emptyList(), e.message ?: "歌词获取失败")
+                callback(emptyList(), e.message ?: "Failed to fetch lyrics")
             }
         }
     }
@@ -198,14 +198,14 @@ class BilibiliSource(
                 callback(
                     Playlist(
                         id = playlistId,
-                        name = rankNames[playlistId] ?: "哔哩哔哩排行榜",
+                        name = rankNames[playlistId] ?: "Bilibili Rankings",
                         coverUrl = null,
                         songs = songs,
                     ),
                     null,
                 )
             } catch (e: Exception) {
-                callback(Playlist(playlistId, rankNames[playlistId] ?: "哔哩哔哩排行榜", null, emptyList()), e.message ?: "网络错误")
+                callback(Playlist(playlistId, rankNames[playlistId] ?: "Bilibili Rankings", null, emptyList()), e.message ?: "Network error")
             }
         }
     }
@@ -221,12 +221,12 @@ class BilibiliSource(
         val bvid = o.optString("bvid") ?: return null
         return Song(
             id = bvid,
-            title = stripHtml(o.optString("title") ?: "未知视频"),
+            title = stripHtml(o.optString("title") ?: "Unknown video"),
             // 搜索是 author 字符串,排行榜是 owner.name
             artist = o.optString("author")
                 ?: o.optObject("owner")?.optString("name")
                 ?: "",
-            album = "哔哩哔哩",
+            album = "Bilibili",
             picUrl = normalizePic(o.optString("pic")),
             durationMs = parseDurationMs(o),
         )

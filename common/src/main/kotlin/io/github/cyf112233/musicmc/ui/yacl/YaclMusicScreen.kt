@@ -15,9 +15,9 @@ import net.minecraft.network.chat.Component
  * YACL 现代化主界面(uiMode=YACL 或 AUTO 且 Android / 无 ModernUI 时)。
  *
  * 现代化视觉:深色渐变背景、主题绿进度、卡片式分组、胶囊按钮、hover 高亮、
- * 状态着色;进度条 / 音量条带可拖动滑块与拖动反馈(拖动中显示目标时间/音量,
+ * 状态着色;进度条 / Volume条带可拖动滑块与拖动反馈(拖动中显示目标时间/Volume,
  * 按住后可移出条身继续拖动,松手结束);布局与交互语义与原版主界面一致
- * (工具行 / 曲目信息 / 进度条可拖拽 seek / 音量条 / 控制行),功能零回归。
+ * (工具行 / 曲目信息 / 进度条可拖拽 seek / Volume条 / 控制行),功能零回归。
  *
  * 屏幕切换统一走 McScreens 版本自适应桥(26.1 调 Minecraft.setScreen,
  * 26.2 调 Minecraft.gui.setScreen),保证同一 jar 双版本可用。
@@ -43,7 +43,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
 
     private var lastSongId: String? = null
 
-    // ---- 进度 / 音量拖动状态(优化拖动逻辑:按下即锁定,可移出条身继续拖) ----
+    // ---- 进度 / Volume拖动状态(优化拖动逻辑:按下即锁定,可移出条身继续拖) ----
     private var draggingProgress = false
     private var draggingVolume = false
     /** 拖动进度条时缓存的当前歌曲总时长(切换歌曲时重置) */
@@ -80,13 +80,13 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         rectQueue.set(w - 5 * topBtnW - 20, topBtnY, w - 4 * topBtnW - 16, topBtnY + topBtnH)
         rectDiscover.set(w - 6 * topBtnW - 24, topBtnY, w - 5 * topBtnW - 20, topBtnY + topBtnH)
         rectSearch.set(w - 7 * topBtnW - 28, topBtnY, w - 6 * topBtnW - 24, topBtnY + topBtnH)
-        YaclTheme.drawPill(g, rectSearch, "搜索", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectDiscover, "发现", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectQueue, "队列", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectFav, "收藏", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectLyrics, "歌词", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectSettings, "设置", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectClose, "关闭", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectSearch, "Search", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectDiscover, "Discover", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectQueue, "Queue", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectFav, "Favorites", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectLyrics, "Lyrics", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectSettings, "Settings", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectClose, "Close", mouseX, mouseY)
 
         // ---- 中部卡片:封面 + 曲目信息 ----
         val panelX = (w - 340).coerceAtLeast(8) / 2
@@ -110,20 +110,25 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val stateY = albumY + 18
 
         if (song != null) {
-            g.drawText(song.title.ifBlank { "未知标题" }, textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
-            g.drawText(song.artist, textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
-            if (song.album.isNotBlank()) g.drawText(song.album, textX, albumY, 12f, 1f, YaclTheme.colorTextDim)
+            // 标题/艺术家/专辑:超出可用宽度时省略号截断;标题额外支持横向滚动
+            // (拖动/播放中长标题往返滚动显示全名,见 drawMarqueeText)
+            val maxTextW = (panelX + panelW - 8) - textX
+            YaclTheme.drawMarqueeText(g, song.title.ifBlank { "Unknown" }, textX, titleY, 16f, maxTextW, YaclTheme.colorTextMain)
+            YaclTheme.drawTextClipped(g, song.artist, textX, artistY, 12f, maxTextW, YaclTheme.colorTextSub)
+            if (song.album.isNotBlank()) {
+                YaclTheme.drawTextClipped(g, song.album, textX, albumY, 12f, maxTextW, YaclTheme.colorTextDim)
+            }
             val (stateText, stateColor) = when (player.state) {
-                PlayerState.PLAYING -> "播放中" to YaclTheme.colorAccentBright
-                PlayerState.PAUSED -> "已暂停" to YaclTheme.colorWarn
-                PlayerState.LOADING -> "加载中…" to YaclTheme.colorTextSub
-                PlayerState.ERROR -> "播放出错" to YaclTheme.colorError
-                else -> "未播放" to YaclTheme.colorTextDim
+                PlayerState.PLAYING -> "Playing" to YaclTheme.colorAccentBright
+                PlayerState.PAUSED -> "Paused" to YaclTheme.colorWarn
+                PlayerState.LOADING -> "Loading…" to YaclTheme.colorTextSub
+                PlayerState.ERROR -> "Playback Error" to YaclTheme.colorError
+                else -> "Idle" to YaclTheme.colorTextDim
             }
             g.drawText(stateText, textX, stateY, 12f, 1f, stateColor)
         } else {
-            g.drawText("未在播放", textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
-            g.drawText("点击下方「搜索歌曲」搜索并播放", textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
+            g.drawText("Not Playing", textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
+            g.drawText("Search above to play", textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
         }
 
         // ---- 进度条 + 时间(拖动中显示目标时间) ----
@@ -143,7 +148,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         } else {
             "${Widgets.formatTime(posMs)} / ${Widgets.formatTime(durMs)}"
         }
-        g.drawText(timeText, panelX, barY + 10, 10f, 1f, YaclTheme.colorTextSub)
+        YaclTheme.drawTextClipped(g, timeText, panelX, barY + 10, 10f, barW, YaclTheme.colorTextSub)
 
         // ---- 控制行 ----
         val ctrlY = barY + 32
@@ -157,12 +162,12 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         YaclTheme.drawBtn(g, rectPlay, if (player.state == PlayerState.PLAYING) "||" else ">", mouseX, mouseY, accent = true)
         YaclTheme.drawBtn(g, rectNext, ">>", mouseX, mouseY)
 
-        val modeLabel = "模式:" + Widgets.playModeLabel(player.mode)
+        val modeLabel = "Mode:" + Widgets.playModeLabel(player.mode)
         val modeW = 96
         rectMode.set(panelX + 3 * btnW + 3 * gap, ctrlY, panelX + 3 * btnW + 3 * gap + modeW, ctrlY + btnH)
         YaclTheme.drawBtn(g, rectMode, modeLabel, mouseX, mouseY)
 
-        // ---- 音量条(带滑块;拖动中显示百分比) ----
+        // ---- Volume条(带滑块;拖动中显示百分比) ----
         val volX = panelX + 3 * btnW + 3 * gap + modeW + 12
         val volW = panelW - (volX - panelX)
         val volY = ctrlY + (btnH - 4) / 2
@@ -173,13 +178,13 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             hoverable = true, active = draggingVolume, color = YaclTheme.colorAccent,
             showThumb = true,
         )
-        val volLabel = if (draggingVolume) "音量 ${(volF * 100).toInt()}%" else "音量"
-        g.drawText(volLabel, volX, ctrlY - 14, 10f, 1f, if (draggingVolume) YaclTheme.colorAccentBright else YaclTheme.colorTextDim)
+        val volLabel = if (draggingVolume) "Volume ${(volF * 100).toInt()}%" else "Volume"
+        YaclTheme.drawTextClipped(g, volLabel, volX, ctrlY - 14, 10f, volW, if (draggingVolume) YaclTheme.colorAccentBright else YaclTheme.colorTextDim)
 
         // ---- 无歌曲:提示文字(顶部工具行已有「搜索」按钮,不重复放入口) ----
         if (song == null) {
             val emptyY = ctrlY + 40
-            g.drawText("点上方「搜索」搜索并播放", panelX, emptyY + 2, 11f, 1f, YaclTheme.colorTextSub)
+            g.drawText("Search above to play", panelX, emptyY + 2, 11f, 1f, YaclTheme.colorTextSub)
         }
     }
 
@@ -219,7 +224,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
         val x = event.x()
-        // 拖动态已锁定:无论指针是否仍在条身上,都按当前 x 持续 seek / 调音量。
+        // 拖动态已锁定:无论指针是否仍在条身上,都按当前 x 持续 seek / 调Volume。
         // seek = 停旧会话开新会话,拖动期间每帧调用开销大且易抖动 → 150ms 节流,
         // 但拖动预览(lastDragX)每次事件都更新,时间标签实时跟随。
         if (draggingProgress) {

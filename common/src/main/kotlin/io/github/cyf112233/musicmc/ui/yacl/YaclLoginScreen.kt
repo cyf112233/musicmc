@@ -17,7 +17,7 @@ import net.minecraft.resources.Identifier
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * YACL 版 B 站扫码登录页。
+ * YACL 版 B 站扫码Login页。
  *
  * 二维码生成不走 java.awt(Android NDK 无 java.desktop):后台线程
  * [io.github.cyf112233.musicmc.ui.vanilla.QrCodeNative.generate] 直写 [NativeImage],
@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
  *
  * 轮询:后台 2s 轮询 [BiliHttp.qrPoll],成功即 [NetMusic.setBilibiliCookie] 并返回上一页。
  */
-class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登录")) {
+class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("Login")) {
 
     private val mc get() = Minecraft.getInstance()
     private val textureManager get() = mc.textureManager
@@ -43,7 +43,7 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
     private val qrSize = 200
 
     @Volatile
-    private var status: String = "正在生成二维码…"
+    private var status: String = "Generating QR…"
 
     @Volatile
     private var generation = 0
@@ -64,7 +64,7 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
 
     private fun startLogin() {
         val gen = ++generation
-        status = "正在生成二维码…"
+        status = "Generating QR…"
         Async.run {
             try {
                 val qr = BiliHttp.qrGenerate()
@@ -73,13 +73,13 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
                 if (img != null) {
                     pendingQr.add(img)
                 } else {
-                    status = "二维码生成失败"
+                    status = "QR generation failed"
                     return@run
                 }
                 pollLoop(gen, qr.qrcodeKey)
             } catch (e: Exception) {
                 if (gen != generation) return@run
-                status = "生成二维码失败: ${e.message ?: "网络错误"}"
+                status = "QR generation failed: ${e.message ?: "network error"}"
             }
         }
     }
@@ -93,21 +93,21 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
                     QrStatus.SUCCESS -> {
                         val cookie = result.cookieHeader
                         if (cookie.isNullOrBlank()) {
-                            status = "登录失败:未获取到登录 Cookie"
+                            status = "Login failed: no cookie received"
                         } else {
                             NetMusic.setBilibiliCookie(cookie)
-                            status = "登录成功"
+                            status = "Logged in"
                             runCatching { McScreens.open(back) }
                         }
                         return@run
                     }
                     QrStatus.EXPIRED -> {
-                        status = "二维码已过期,请点击刷新"
+                        status = "QR code expired, click to refresh"
                         return@run
                     }
-                    QrStatus.SCANNED -> status = "已扫码,请在手机上确认"
-                    QrStatus.WAIT -> status = "等待扫码…"
-                    null -> status = "轮询失败,自动重试…"
+                    QrStatus.SCANNED -> status = "Scanned, confirm on your phone"
+                    QrStatus.WAIT -> status = "Waiting for scan…"
+                    null -> status = "Polling failed, retrying…"
                 }
                 try {
                     Thread.sleep(2000)
@@ -126,8 +126,8 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< 返回", mouseX, mouseY)
-        YaclTheme.drawCenteredTitle(g, "B 站扫码登录", w / 2, 10)
+        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        YaclTheme.drawCenteredTitle(g, "Bilibili QR Login", w / 2, 10)
 
         // 渲染帧 pump:后台生成的二维码 → DynamicTexture 注册(需要 GL 上下文)
         val pending = pendingQr.poll()
@@ -146,19 +146,19 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
             g.drawTexture(qrId, qrX, qrY, qrSize, qrSize)
         } else {
             g.fill(qrX, qrY, qrX + qrSize, qrY + qrSize, 0xFF181818.toInt())
-            g.drawText("二维码生成中…", qrX + 40, qrY + qrSize / 2 - 5, 11f, 1f, YaclTheme.colorTextDim)
+            g.drawText("Generating QR…", qrX + 40, qrY + qrSize / 2 - 5, 11f, 1f, YaclTheme.colorTextDim)
         }
 
         val statusColor = when {
-            status.contains("成功") -> YaclTheme.colorAccentBright
-            status.contains("失败") || status.contains("过期") -> YaclTheme.colorError
+            status.contains("Logged in") || status.contains("success") -> YaclTheme.colorAccentBright
+            status.contains("failed") || status.contains("expired") -> YaclTheme.colorError
             else -> YaclTheme.colorTextSub
         }
         g.drawText(status, w / 2 - g.textWidth(status) / 2, qrY + qrSize + 14, 11f, 1f, statusColor)
 
         rectRefreshBtn.x1 = w / 2 - 50; rectRefreshBtn.y1 = qrY + qrSize + 34
         rectRefreshBtn.x2 = w / 2 + 50; rectRefreshBtn.y2 = qrY + qrSize + 58
-        YaclTheme.drawBtn(g, rectRefreshBtn, "刷新二维码", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectRefreshBtn, "Refresh QR", mouseX, mouseY)
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
