@@ -144,11 +144,19 @@ jobs:
           ls -la "$OUT"
 
       # 打平台 jar(等价 :native:packageNative:from build/native/<platform> JAR 到 libs/)
+      # 注意:必须打包整个平台目录 —— 既含 javacpp Loader 布局 org/bytedeco/ffmpeg/<platform>/
+      # (FFmpeg .so),也含 mod 自有布局 musicmc/audio/<platform>/(AAudio 输出库,仅 android)。
+      # 2026-08 修复:此前只打包 org/ 漏了 musicmc/audio/,导致 CI 产物缺 AAudio 库,
+      # 而手机缓存残留旧签名 .so,新 Java JNI(带 owner 参数)调旧库参数错位 →
+      # "AAudio 初始化失败" 且无原生层错误日志。
       - name: Package platform jar
         run: |
           mkdir -p native/build/libs
           cd "native/build/native/${{ matrix.platform }}"
-          jar cf "../../libs/musicmc-native-${{ matrix.platform }}.jar" org
+          # musicmc/audio 仅 android 平台存在;jar 对不存在的条目会报错,故条件追加
+          ARGS="org"
+          [ -d musicmc ] && ARGS="$ARGS musicmc"
+          jar cf "../../libs/musicmc-native-${{ matrix.platform }}.jar" $ARGS
           ls -la ../../libs
 
       - uses: actions/upload-artifact@v4

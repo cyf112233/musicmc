@@ -278,14 +278,23 @@ object NativeLibBridge {
             val audioRes = "musicmc/audio/$platform/libmusicmc_audio.so"
             val audioFile = cacheDir.resolve("libmusicmc_audio.so")
             // 总是覆盖解包(历史坑:旧 OpenSL 版同名校验文件曾留在缓存,exists 检查会跳过
-            // 更新导致加载旧库 → AAudioPlayer.nativeInit UnsatisfiedLinkError)
+            // 更新导致加载旧库 → AAudioPlayer.nativeInit UnsatisfiedLinkError)。
+            // 2026-08 再修复:若资源缺失(如旧版 CI 产物漏打 musicmc/audio/),必须删除
+            // 缓存残留的旧 .so —— 否则会加载**旧 JNI 签名**的库(nativeInit(rate,ch) 无
+            // owner 参数),新 Java 调用参数错位 → "AAudio 初始化失败" 且无原生层错误日志。
+            var audioLoaded = false
             runCatching {
                 val input = openResource(audioRes)
                 if (input != null) {
                     input.use { Files.copy(it, audioFile, StandardCopyOption.REPLACE_EXISTING) }
+                    audioLoaded = true
                 }
             }
-            if (Files.exists(audioFile)) {
+            if (!audioLoaded) {
+                // 资源缺失:清掉可能残留的旧库,宁可不加载也不加载错签名
+                runCatching { Files.deleteIfExists(audioFile) }
+                warn("缺少 $platform 音频输出库资源: $audioRes(Android 将无法出声)")
+            } else if (Files.exists(audioFile)) {
                 System.load(audioFile.toString())
                 info("$platform 音频输出库已加载(AAudio)")
             } else {
