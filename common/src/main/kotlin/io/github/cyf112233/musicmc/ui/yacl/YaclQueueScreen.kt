@@ -1,9 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.ui.Widgets
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component
 class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播放队列")) {
 
     private val player get() = NetMusic.player
-    private val mc get() = Minecraft.getInstance()
 
     private var scroll = 0
 
@@ -67,7 +66,7 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectModeBtn.hit(x, y)) { player.cycleMode(); return true }
         if (rectClearBtn.hit(x, y)) { player.clearQueue(); return true }
         val queue = player.queue

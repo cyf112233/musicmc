@@ -1,11 +1,11 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.CoverTextureCache
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.player.PlayerState
 import io.github.cyf112233.musicmc.ui.Widgets
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -20,7 +20,6 @@ import net.minecraft.network.chat.Component
  */
 class YaclHudEditorScreen : Screen(Component.literal("HUD 编辑器")) {
 
-    private val mc get() = Minecraft.getInstance()
     private val config get() = NetMusic.config
 
     private var curX = config.hudX
@@ -107,7 +106,7 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD 编辑器")) {
         }
         if (rectDone.hit(x.toDouble(), y.toDouble())) {
             save()
-            mc.setScreen(null)
+            McScreens.open(null)
             return true
         }
         // 面板内按下 → 进入拖拽

@@ -117,9 +117,13 @@ object NativeLibBridge {
      *    自身加载库 —— 手动 System.load 注册在 mod 类加载器,avutil 由 FML Plugins
      *    类加载器加载,native 符号查找按 classloader 隔离,手动加载必然 UnsatisfiedLinkError。
      *
+     * @param baseDir 配置目录兜底(仅当所有 JVM 属性目录都不可用时使用)
+     * @param cacheDirOverride 用户显式指定的解包目录(ModConfig.nativeCacheDir;
+     *   非空则优先于自动判定;指定目录不可用时会告警并回退自动判定)
+     *
      * 其他平台直接返回(不干预 Loader 正常路径)。
      */
-    fun preloadIfNeeded(baseDir: Path) {
+    fun preloadIfNeeded(baseDir: Path, cacheDirOverride: String? = null) {
         if (preloaded) return
         synchronized(this) {
             if (preloaded) return
@@ -132,9 +136,58 @@ object NativeLibBridge {
             if (isWinArm) {
                 preloadWindowsArm64(baseDir)
             } else {
-                prepareAndroidLoader(androidP!!, baseDir)
+                prepareAndroidLoader(androidP!!, baseDir, cacheDirOverride)
             }
         }
+    }
+
+    /**
+     * 挑选 Android 原生库解包根目录(launcher 无关;不假设 FCL 路径)。
+     *
+     * 候选顺序:用户显式覆盖(config.nativeCacheDir)→ java.io.tmpdir →
+     * user.home → user.dir → 兜底 baseDir。每个候选都要通过 [isExecCapable]
+     * 探测(可写 **且** 文件系统支持执行 —— dlopen 需要 exec,共享存储等 noexec
+     * 挂载会被 Android linker 拒绝,只有 app 私有可执行区可用)。
+     */
+    private fun pickExtractRoot(baseDir: Path, cacheDirOverride: String?): Path {
+        val candidates = buildList {
+            cacheDirOverride?.takeIf { it.isNotBlank() }?.let { add(Path.of(it)) }
+            addAll(
+                listOfNotNull(
+                    System.getProperty("java.io.tmpdir"),
+                    System.getProperty("user.home"),
+                    System.getProperty("user.dir"),
+                ).mapNotNull { c ->
+                    runCatching { Path.of(c).toAbsolutePath() }.getOrNull()
+                },
+            )
+        }
+        for (c in candidates) {
+            if (isExecCapable(c)) return c
+        }
+        if (cacheDirOverride?.isNotBlank() == true) {
+            warn("指定的原生库目录不可用(不存在/不可写/不可执行): $cacheDirOverride,回退自动判定")
+        }
+        return baseDir
+    }
+
+    /**
+     * 目录是否可作原生库解包区:存在 + 可写 + **可执行**。
+     * 可执行性用「写一个探针文件并检查 X_OK」验证:Linux 的 access(path, X_OK)
+     * 会同时反映挂载的 noexec 标志 —— noexec 挂载(共享存储)上即使文件带
+     * 执行位,isExecutable 也返回 false,从而把这类目录排除在候选之外。
+     */
+    private fun isExecCapable(dir: Path): Boolean {
+        return runCatching {
+            if (!Files.isDirectory(dir)) return false
+            val probe = Files.createTempFile(dir, ".musicmc_exec_probe", ".so")
+            try {
+                probe.toFile().setExecutable(true, false)
+                Files.isExecutable(probe)
+            } finally {
+                runCatching { Files.deleteIfExists(probe) }
+            }
+        }.getOrDefault(false)
     }
 
     /**
@@ -195,28 +248,15 @@ object NativeLibBridge {
      *    libjnijavacpp.so —— 1.5.12 的 libjni*.so 已静态包含 javacpp 运行时,
      *    且 -static-libstdc++ 静态链接 libc++,不触碰 FCL JVM 已占用的 libc++_shared.so)。
      */
-    private fun prepareAndroidLoader(platform: String, baseDir: Path) {
+    private fun prepareAndroidLoader(platform: String, baseDir: Path, cacheDirOverride: String? = null) {
         try {
-            // 解包根目录必须是 app 私有可执行区。
-            // FCL 把 MC 版本目录放在共享存储(/storage/emulated/0/),Android linker
-            // 对共享存储执行 noexec —— 从那里 dlopen 一律报 "is not accessible for
-            // the namespace clns-6"。app 数据目录(/data/user/0/...)可执行:证据是
-            // FCL 的 libjvm.so 就在 app_runtime 私有目录,OpenAL/LWJGL 原生库也从
-            // 私有目录加载成功。候选根目录:java.io.tmpdir → user.home → user.dir
-            // (均为 app 私有区),全部不可用才回退 baseDir。
-            val extractRoot = {
-                val candidates = listOfNotNull(
-                    System.getProperty("java.io.tmpdir"),
-                    System.getProperty("user.home"),
-                    System.getProperty("user.dir"),
-                )
-                candidates.mapNotNull { c ->
-                    runCatching {
-                        val p = Path.of(c).toAbsolutePath()
-                        if (Files.isDirectory(p) && Files.isWritable(p)) p else null
-                    }.getOrNull()
-                }.firstOrNull() ?: baseDir
-            }.invoke()
+            // 解包根目录必须是 app 私有可执行区(launcher 无关,不假设 FCL)。
+            // Android linker 对共享存储执行 noexec —— 从那里 dlopen 一律报
+            // "is not accessible for the namespace clns-6"。候选根目录按
+            // 用户覆盖 → java.io.tmpdir → user.home → user.dir 依次探测
+            // (要求可写且可执行,见 [pickExtractRoot] / [isExecCapable]),
+            // 全部不可用才回退 baseDir(配置目录,通常也在共享存储,此时仅告警)。
+            val extractRoot = pickExtractRoot(baseDir, cacheDirOverride)
 
             // javacpp Loader 的解包缓存目录(Loader.getCacheDir 静态缓存,必须在本进程
             // 首次触碰 bytedeco 类之前设置):Loader 默认候选 user.home/.javacpp/cache,
@@ -225,10 +265,11 @@ object NativeLibBridge {
             Files.createDirectories(cacheDir)
             System.setProperty("org.bytedeco.javacpp.cachedir", cacheDir.toString())
             // platform 属性同样必须在首次触碰 bytedeco 类之前钉死(javacpp Loader 静态缓存)。
-            // NetMusic.init 里本方法先于 config 加载/override 设置执行,这里先行钉死 android 平台;
-            // 之后若用户显式配置了 nativePlatformOverride,NetMusic.init 会再覆盖(已初始化完成的
-            // avutil 类与已加载库不受影响,播放走缓存)。
-            System.setProperty("org.bytedeco.javacpp.platform", platform)
+            // NetMusic.init 已先按 nativePlatformOverride(若配置)设置过该属性 —— 这里
+            // 只在属性仍为空时补钉系统自动判定的 android 平台,避免覆盖用户的显式覆盖。
+            if (System.getProperty("org.bytedeco.javacpp.platform").isNullOrBlank()) {
+                System.setProperty("org.bytedeco.javacpp.platform", platform)
+            }
             info("$platform javacpp cachedir: $cacheDir")
 
             // AAudio 音频输出库(独立资源路径 musicmc/audio/<platform>/,不混入 javacpp

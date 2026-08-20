@@ -3,9 +3,9 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.model.Song
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -20,7 +20,6 @@ class YaclFavDetailScreen(
     private val back: Screen,
 ) : Screen(Component.literal("收藏夹")) {
 
-    private val mc get() = Minecraft.getInstance()
     private val player get() = NetMusic.player
 
     private val songs = ArrayList<Song>()
@@ -106,7 +105,7 @@ class YaclFavDetailScreen(
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectPlayAllBtn.hit(x, y)) {
             if (songs.isNotEmpty()) player.play(songs[0], songs.toList(), 0)
             return true

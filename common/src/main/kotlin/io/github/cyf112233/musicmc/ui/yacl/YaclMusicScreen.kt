@@ -4,8 +4,8 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.CoverTextureCache
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.player.PlayerState
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.ui.Widgets
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -14,16 +14,18 @@ import net.minecraft.network.chat.Component
 /**
  * YACL 现代化主界面(uiMode=YACL 或 AUTO 且 Android / 无 ModernUI 时)。
  *
- * 现代化视觉(相对原版):深色渐变背景、主题绿进度、卡片式分组、胶囊按钮、
- * hover 高亮、状态着色;布局与交互语义与原版主界面一致
+ * 现代化视觉:深色渐变背景、主题绿进度、卡片式分组、胶囊按钮、hover 高亮、
+ * 状态着色;进度条 / 音量条带可拖动滑块与拖动反馈(拖动中显示目标时间/音量,
+ * 按住后可移出条身继续拖动,松手结束);布局与交互语义与原版主界面一致
  * (工具行 / 曲目信息 / 进度条可拖拽 seek / 音量条 / 控制行),功能零回归。
- * 全部子界面导航到 Yacl*Screen,设置走 YACL 配置界面。
+ *
+ * 屏幕切换统一走 McScreens 版本自适应桥(26.1 调 Minecraft.setScreen,
+ * 26.2 调 Minecraft.gui.setScreen),保证同一 jar 双版本可用。
  */
 class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
 
     private val player get() = NetMusic.player
     private val config get() = NetMusic.config
-    private val mc get() = Minecraft.getInstance()
 
     private val rectSearch = YaclTheme.Rect(0, 0, 0, 0)
     private val rectDiscover = YaclTheme.Rect(0, 0, 0, 0)
@@ -42,6 +44,14 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
 
     private var lastSongId: String? = null
 
+    // ---- 进度 / 音量拖动状态(优化拖动逻辑:按下即锁定,可移出条身继续拖) ----
+    private var draggingProgress = false
+    private var draggingVolume = false
+    /** 拖动进度条时缓存的当前歌曲总时长(切换歌曲时重置) */
+    private var dragDurationMs = 0
+    /** 最近一次拖动进度条的 x(拖动预览用;非拖动态无效) */
+    private var lastDragX = 0.0
+
     override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
         val g = GuiGraphicsHudGui(graphics)
         val w = g.guiWidth()
@@ -51,6 +61,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val song = player.current
         if (song != null && song.id != lastSongId) {
             lastSongId = song.id
+            dragDurationMs = song.durationMs
             CoverTextureCache.prepare(song.picUrl)
         }
 
@@ -81,18 +92,15 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val panelW = 340
         val cardY = 40
         val cardH = 200
-        g.fill(panelX - 8, cardY - 8, panelX + panelW + 8, cardY + cardH + 8, YaclTheme.colorCard)
-        g.fill(panelX - 8, cardY - 8, panelX + panelW + 8, cardY - 7, YaclTheme.colorCardBorder)
-        g.fill(panelX - 8, cardY + cardH + 7, panelX + panelW + 8, cardY + cardH + 8, YaclTheme.colorCardBorder)
+        YaclTheme.drawCard(g, panelX - 8, cardY - 8, panelX + panelW + 8, cardY + cardH + 8)
 
         val coverY = cardY
         val coverSize = 96
         val coverId = CoverTextureCache.currentIdentifier()
         if (coverId != null) {
-            g.drawTexture(coverId, panelX, coverY, coverSize, coverSize)
+            YaclTheme.drawCover(g, coverId, panelX, coverY, coverSize)
         } else {
-            g.fill(panelX, coverY, panelX + coverSize, coverY + coverSize, YaclTheme.colorBtn)
-            g.drawText("No Cover", panelX + 8, coverY + coverSize / 2 - 5, 10f, 1f, YaclTheme.colorTextDim)
+            YaclTheme.drawCoverPlaceholder(g, panelX, coverY, coverSize)
         }
         val textX = panelX + coverSize + 12
         val titleY = coverY
@@ -117,21 +125,24 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             g.drawText("点击下方「搜索歌曲」搜索并播放", textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
         }
 
-        // ---- 进度条 + 时间 ----
+        // ---- 进度条 + 时间(拖动中显示目标时间) ----
         val barY = coverY + coverSize + 26
         val barH = 6
         val barW = panelW
         rectProgress.set(panelX, barY, panelX + barW, barY + barH)
-        g.fill(rectProgress.x1, rectProgress.y1, rectProgress.x2, rectProgress.y2, YaclTheme.colorTrack)
         val posMs = player.engine.positionMs()
-        val durMs = song?.durationMs ?: 0
+        val durMs = if (draggingProgress) dragDurationMs else (song?.durationMs ?: 0)
         val progress = if (durMs > 0) (posMs.toFloat() / durMs).coerceIn(0f, 1f) else 0f
-        val fillW = (barW * progress).toInt()
-        if (fillW > 0) {
-            g.fill(panelX, barY, panelX + fillW, barY + barH, YaclTheme.colorAccent)
-            g.fill(panelX, barY, panelX + fillW, barY + 1, YaclTheme.colorAccentBright)
+        YaclTheme.drawProgressBar(
+            g, rectProgress, progress, mouseX, mouseY,
+            hoverable = true, active = draggingProgress, color = YaclTheme.colorAccent,
+        )
+        val timeText = if (draggingProgress) {
+            "${Widgets.formatTime(dragPreviewMs(posMs, durMs))} / ${Widgets.formatTime(durMs)}"
+        } else {
+            "${Widgets.formatTime(posMs)} / ${Widgets.formatTime(durMs)}"
         }
-        g.drawText("${Widgets.formatTime(posMs)} / ${Widgets.formatTime(durMs)}", panelX, barY + 10, 10f, 1f, YaclTheme.colorTextSub)
+        g.drawText(timeText, panelX, barY + 10, 10f, 1f, YaclTheme.colorTextSub)
 
         // ---- 控制行 ----
         val ctrlY = barY + 32
@@ -150,18 +161,19 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         rectMode.set(panelX + 3 * btnW + 3 * gap, ctrlY, panelX + 3 * btnW + 3 * gap + modeW, ctrlY + btnH)
         YaclTheme.drawBtn(g, rectMode, modeLabel, mouseX, mouseY)
 
+        // ---- 音量条(带滑块;拖动中显示百分比) ----
         val volX = panelX + 3 * btnW + 3 * gap + modeW + 12
         val volW = panelW - (volX - panelX)
         val volY = ctrlY + (btnH - 4) / 2
         rectVolume.set(volX, volY, volX + volW, volY + 4)
-        g.fill(rectVolume.x1, rectVolume.y1, rectVolume.x2, rectVolume.y2, YaclTheme.colorTrack)
         val volF = config.volume.coerceIn(0f, 1f)
-        val volFill = (volW * volF).toInt()
-        if (volFill > 0) {
-            g.fill(volX, volY, volX + volFill, volY + 4, YaclTheme.colorAccent)
-            g.fill(volX, volY, volX + volFill, volY + 1, YaclTheme.colorAccentBright)
-        }
-        g.drawText("音量", volX, ctrlY - 14, 10f, 1f, YaclTheme.colorTextDim)
+        YaclTheme.drawProgressBar(
+            g, rectVolume, volF, mouseX, mouseY,
+            hoverable = true, active = draggingVolume, color = YaclTheme.colorAccent,
+            showThumb = true,
+        )
+        val volLabel = if (draggingVolume) "音量 ${(volF * 100).toInt()}%" else "音量"
+        g.drawText(volLabel, volX, ctrlY - 14, 10f, 1f, if (draggingVolume) YaclTheme.colorAccentBright else YaclTheme.colorTextDim)
 
         // ---- 无歌曲:搜索入口 ----
         if (song == null) {
@@ -177,33 +189,63 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val x = event.x()
         val y = event.y()
         when {
-            rectClose.hit(x, y) -> { mc.setScreen(null); return true }
-            rectSearch.hit(x, y) -> { mc.setScreen(YaclSearchScreen(this)); return true }
-            rectDiscover.hit(x, y) -> { mc.setScreen(YaclDiscoverScreen(this)); return true }
-            rectQueue.hit(x, y) -> { mc.setScreen(YaclQueueScreen(this)); return true }
-            rectFav.hit(x, y) -> { mc.setScreen(YaclFavScreen(this)); return true }
-            rectLyrics.hit(x, y) -> { mc.setScreen(YaclLyricScreen(this)); return true }
+            rectClose.hit(x, y) -> { McScreens.open(null); return true }
+            rectSearch.hit(x, y) -> { McScreens.open(YaclSearchScreen(this)); return true }
+            rectDiscover.hit(x, y) -> { McScreens.open(YaclDiscoverScreen(this)); return true }
+            rectQueue.hit(x, y) -> { McScreens.open(YaclQueueScreen(this)); return true }
+            rectFav.hit(x, y) -> { McScreens.open(YaclFavScreen(this)); return true }
+            rectLyrics.hit(x, y) -> { McScreens.open(YaclLyricScreen(this)); return true }
             rectSettings.hit(x, y) -> { NetMusic.openConfigScreen(); return true }
             rectPrev.hit(x, y) -> { player.prev(); return true }
             rectPlay.hit(x, y) -> { player.toggle(); return true }
             rectNext.hit(x, y) -> { player.next(); return true }
             rectMode.hit(x, y) -> { player.cycleMode(); return true }
-            rectProgress.hit(x, y) -> { seekFrom(x); return true }
-            rectVolume.hit(x, y) -> { volumeFrom(x); return true }
-            rectSearchEmpty.hit(x, y) -> { mc.setScreen(YaclSearchScreen(this)); return true }
+            rectProgress.hit(x, y) -> {
+                // 按下进度条:锁定拖动态(之后即使移出条身仍继续 seek,直到 mouseReleased)
+                draggingProgress = true
+                lastDragX = x
+                dragDurationMs = player.current?.durationMs ?: 0
+                seekFrom(x)
+                return true
+            }
+            rectVolume.hit(x, y) -> {
+                draggingVolume = true
+                volumeFrom(x)
+                return true
+            }
+            rectSearchEmpty.hit(x, y) -> { McScreens.open(YaclSearchScreen(this)); return true }
         }
         return super.mouseClicked(event, doubleClick)
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
         val x = event.x()
-        val y = event.y()
-        if (rectProgress.hit(x, y)) { seekFrom(x); return true }
-        if (rectVolume.hit(x, y)) { volumeFrom(x); return true }
+        // 拖动态已锁定:无论指针是否仍在条身上,都按当前 x 持续 seek / 调音量
+        if (draggingProgress) {
+            lastDragX = x
+            seekFrom(x)
+            return true
+        }
+        if (draggingVolume) { volumeFrom(x); return true }
         return super.mouseDragged(event, dx, dy)
     }
 
+    override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        draggingProgress = false
+        draggingVolume = false
+        return super.mouseReleased(event)
+    }
+
     override fun isPauseScreen(): Boolean = false
+
+    /** 拖动进度条时预览的 seek 目标(毫秒);未拖动时返回当前进度 */
+    private fun dragPreviewMs(posMs: Long, durMs: Int): Int {
+        if (!draggingProgress) return posMs.toInt()
+        val bar = rectProgress
+        if (bar.x2 <= bar.x1 || durMs <= 0) return posMs.toInt()
+        val ratio = ((lastDragX.coerceIn(bar.x1.toDouble(), bar.x2.toDouble()) - bar.x1) / (bar.x2 - bar.x1))
+        return (ratio.toFloat() * durMs).toInt().coerceIn(0, durMs)
+    }
 
     private fun seekFrom(x: Double) {
         val song = player.current ?: return

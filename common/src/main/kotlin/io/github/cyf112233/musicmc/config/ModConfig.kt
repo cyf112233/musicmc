@@ -41,6 +41,15 @@ data class ModConfig(
      */
     val nativePlatformOverride: String = "",
     /**
+     * 原生库解包缓存目录强制覆盖(非 FCL 启动器 / 非常规 tmpdir 场景):
+     * Android 上 javacpp Loader 与 AAudio .so 的解包目录默认取
+     * java.io.tmpdir → user.home → user.dir 中**可写且可执行**(dlopen 需要 exec,
+     * noexec 挂载如共享存储会被拒绝)的第一个目录;若启动器把这些属性指到
+     * noexec 路径导致"原生库加载失败",可在此手动指定一个 app 私有可执行目录
+     * (如 /data/user/0/<包名>/cache/musicmc-native)。留空 = 自动判定。
+     */
+    val nativeCacheDir: String = "",
+    /**
      * UI 方案:AUTO(默认,装了哪个用哪个 —— PC:ModernUI > YACL > 原版;
      * Android:YACL > 原版,ModernUI 永不用于 Android)/ MODERN_UI / YACL / VANILLA。
      * Android(FCL)上 ModernUI 3.13 的文字渲染依赖 Java2D(java.awt),而 NDK OpenJDK

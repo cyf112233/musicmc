@@ -13,7 +13,6 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.player.PlayMode
 import io.github.cyf112233.musicmc.ui.UiBackend
 import io.github.cyf112233.musicmc.ui.UiBackendResolver
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
@@ -49,6 +48,7 @@ object YaclConfigScreen {
         var chatLyricEnabled = cfg.chatLyricEnabled
         var hudEnabled = cfg.hudEnabled
         var nativeOverride = cfg.nativePlatformOverride
+        var nativeCacheDir = cfg.nativeCacheDir
 
         fun boolOption(name: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit): Option<Boolean> =
             Option.createBuilder<Boolean>()
@@ -98,7 +98,8 @@ object YaclConfigScreen {
                         val newMode = if (current == UiBackend.MODERN_UI) "YACL" else "MODERN_UI"
                         NetMusic.updateConfig { it.copy(uiMode = newMode) }
                         // 关闭配置界面并按新 UI 重新打开音乐界面
-                        net.minecraft.client.Minecraft.getInstance().setScreen(null)
+                        // (屏幕切换统一走 McScreens 版本自适应桥:26.1 Minecraft.setScreen / 26.2 Gui.setScreen)
+                        io.github.cyf112233.musicmc.platform.McScreens.open(null)
                         NetMusic.openScreen()
                     }
                     .build(),
@@ -170,7 +171,7 @@ object YaclConfigScreen {
                     .name(Component.literal("打开 HUD 编辑器"))
                     .description(OptionDescription.of(Component.literal("拖动调整悬浮面板位置,滚轮缩放;拖动时实时生效")))
                     .text(Component.literal("编辑"))
-                    .action { net.minecraft.client.Minecraft.getInstance().setScreen(YaclHudEditorScreen()) }
+                    .action { io.github.cyf112233.musicmc.platform.McScreens.open(YaclHudEditorScreen()) }
                     .build(),
             )
             .build()
@@ -189,6 +190,23 @@ object YaclConfigScreen {
                         )
                     }
                     .binding("", { nativeOverride }, { nativeOverride = it.trim() })
+                    .controller { StringControllerBuilder.create(it) }
+                    .build(),
+            )
+            .option(
+                Option.createBuilder<String>()
+                    .name(Component.literal("原生库缓存目录"))
+                    .description {
+                        OptionDescription.of(
+                            Component.literal(
+                                "Android 上 javacpp/AAudio 原生库解包目录(需可执行)。" +
+                                    "留空自动判定(按 tmpdir → user.home → user.dir 取首个可写且可执行目录);" +
+                                    "非 FCL 启动器或自动判定失败时,可手动填 app 私有可执行目录" +
+                                    "(如 /data/user/0/<包名>/cache/musicmc-native)",
+                            ),
+                        )
+                    }
+                    .binding("", { nativeCacheDir }, { nativeCacheDir = it.trim() })
                     .controller { StringControllerBuilder.create(it) }
                     .build(),
             )
@@ -212,6 +230,7 @@ object YaclConfigScreen {
                         chatLyricEnabled = chatLyricEnabled,
                         hudEnabled = hudEnabled,
                         nativePlatformOverride = nativeOverride,
+                        nativeCacheDir = nativeCacheDir,
                     )
                 }
             }
@@ -219,7 +238,7 @@ object YaclConfigScreen {
             .generateScreen(parent)
 
         // 保持旧行为:直接打开(音乐界面「设置」按钮等调用方不变);返回 Screen 供平台配置菜单使用
-        Minecraft.getInstance().setScreen(screen)
+        io.github.cyf112233.musicmc.platform.McScreens.open(screen)
         return screen
     }
 }

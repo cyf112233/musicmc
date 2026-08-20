@@ -2,6 +2,7 @@ package io.github.cyf112233.musicmc.client
 
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.platform.HudGui
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.ui.hud.HudFrame
 import io.github.cyf112233.musicmc.ui.hud.HudLayout
 import io.github.cyf112233.musicmc.ui.hud.HudLyricsCache
@@ -66,7 +67,8 @@ object MusicHudRenderer {
         CoverTextureCache.pump()
 
         // b) 打开任何界面(screen != null)或 HUD 关闭 → 不绘制
-        if (mc.screen != null || !NetMusic.config.hudEnabled) return
+        //    (26.2 起 Minecraft.screen 迁入 Minecraft.gui,统一走版本自适应桥 McScreens)
+        if (McScreens.current() != null || !NetMusic.config.hudEnabled) return
 
         val player = NetMusic.player
         val song = player.current ?: return

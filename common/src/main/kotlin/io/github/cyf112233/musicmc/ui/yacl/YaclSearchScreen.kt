@@ -1,9 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.model.Song
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
@@ -17,7 +17,6 @@ import net.minecraft.network.chat.Component
  */
 class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜索")) {
 
-    private val mc get() = Minecraft.getInstance()
     private val results = ArrayList<Song>()
     private var error: String? = null
     private var searching = false
@@ -84,7 +83,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectSearchBtn.hit(x, y)) { doSearch(); return true }
         // 结果行点击 → 播放并返回主界面
         val listY = 48
@@ -123,7 +122,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("搜
 
     private fun playAndBack(song: Song) {
         NetMusic.player.play(song)
-        mc.setScreen(YaclMusicScreen())
+        McScreens.open(YaclMusicScreen())
     }
 
     private fun doSearch() {

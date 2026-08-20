@@ -1,9 +1,9 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.model.Playlist
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -15,7 +15,6 @@ import net.minecraft.network.chat.Component
  */
 class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("ÂèëÁé∞")) {
 
-    private val mc get() = Minecraft.getInstance()
 
     private var playlists: List<Playlist>? = null
     private var error: String? = null
@@ -78,7 +77,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("Â
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         val list = playlists ?: return super.mouseClicked(event, doubleClick)
         if (list.isNotEmpty()) {
             val rowH = 24
@@ -86,7 +85,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("Â
             if (x >= listX && x < listX + 360 && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
-                    mc.setScreen(YaclPlaylistScreen(list[row], this))
+                    McScreens.open(YaclPlaylistScreen(list[row], this))
                     return true
                 }
             }

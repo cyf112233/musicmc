@@ -1,10 +1,10 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.model.Playlist
 import io.github.cyf112233.musicmc.model.Song
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -19,7 +19,6 @@ class YaclPlaylistScreen(
     private val back: Screen,
 ) : Screen(Component.literal("歌单")) {
 
-    private val mc get() = Minecraft.getInstance()
     private val player get() = NetMusic.player
 
     private var songs: List<Song>? = playlist.songs.takeIf { it.isNotEmpty() }
@@ -92,7 +91,7 @@ class YaclPlaylistScreen(
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         val list = songs ?: return super.mouseClicked(event, doubleClick)
         if (rectPlayAllBtn.hit(x, y)) {
             if (list.isNotEmpty()) player.play(list[0], list, 0)

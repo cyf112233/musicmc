@@ -44,22 +44,22 @@ class FabricPlatform : ModPlatform {
             )
         ) {
             io.github.cyf112233.musicmc.ui.UiBackend.MODERN_UI ->
-                Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(MusicMainFragment()))
+                io.github.cyf112233.musicmc.platform.McScreens.open(MuiModApi.get().createScreen(MusicMainFragment()))
             io.github.cyf112233.musicmc.ui.UiBackend.YACL ->
-                Minecraft.getInstance().setScreen(io.github.cyf112233.musicmc.ui.yacl.YaclMusicScreen())
+                io.github.cyf112233.musicmc.platform.McScreens.open(io.github.cyf112233.musicmc.ui.yacl.YaclMusicScreen())
         }
     }
 
     override fun openConfigScreen() {
-        io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(Minecraft.getInstance().screen)
+        io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(io.github.cyf112233.musicmc.platform.McScreens.current())
     }
 
     override fun openHudEditor() {
-        Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(HudEditorFragment()))
+        io.github.cyf112233.musicmc.platform.McScreens.open(MuiModApi.get().createScreen(HudEditorFragment()))
     }
 
     override fun closeScreen() {
-        Minecraft.getInstance().setScreen(null)
+        io.github.cyf112233.musicmc.platform.McScreens.open(null)
     }
 
     override fun postToUiThread(runnable: Runnable) {

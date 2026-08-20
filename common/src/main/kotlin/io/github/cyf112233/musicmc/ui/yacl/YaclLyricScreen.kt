@@ -1,11 +1,11 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.util.Lrc
 import io.github.cyf112233.musicmc.ui.Widgets
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -17,7 +17,6 @@ import net.minecraft.network.chat.Component
  */
 class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("歌词")) {
 
-    private val mc get() = Minecraft.getInstance()
     private val player get() = NetMusic.player
 
     private var lines: List<LyricLine> = emptyList()
@@ -122,7 +121,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("歌�
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectFollowBtn.hit(x, y)) { autoFollow = !autoFollow; return true }
         return super.mouseClicked(event, doubleClick)
     }

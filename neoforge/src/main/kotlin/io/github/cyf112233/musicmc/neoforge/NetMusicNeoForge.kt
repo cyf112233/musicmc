@@ -146,8 +146,8 @@ private class NeoForgePlatform : ModPlatform {
                 isModernUiLoaded(),
             )
         ) {
-            UiBackend.YACL -> Minecraft.getInstance().setScreen(YaclMusicScreen())
-            UiBackend.MODERN_UI -> Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(MusicMainFragment()))
+            UiBackend.YACL -> io.github.cyf112233.musicmc.platform.McScreens.open(YaclMusicScreen())
+            UiBackend.MODERN_UI -> io.github.cyf112233.musicmc.platform.McScreens.open(MuiModApi.get().createScreen(MusicMainFragment()))
         }
     }
 
@@ -155,15 +155,15 @@ private class NeoForgePlatform : ModPlatform {
 
 
     override fun openConfigScreen() {
-        io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(Minecraft.getInstance().screen)
+        io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(io.github.cyf112233.musicmc.platform.McScreens.current())
     }
 
     override fun openHudEditor() {
-        Minecraft.getInstance().setScreen(MuiModApi.get().createScreen(HudEditorFragment()))
+        io.github.cyf112233.musicmc.platform.McScreens.open(MuiModApi.get().createScreen(HudEditorFragment()))
     }
 
     override fun closeScreen() {
-        Minecraft.getInstance().setScreen(null)
+        io.github.cyf112233.musicmc.platform.McScreens.open(null)
     }
 
     override fun postToUiThread(runnable: Runnable) {

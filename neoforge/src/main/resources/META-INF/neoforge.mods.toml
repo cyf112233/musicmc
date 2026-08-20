@@ -21,7 +21,7 @@ license="GPL-3.0"
 [[dependencies.musicmc]]
     modId="minecraft"
     type="required"
-    versionRange="[26.1,26.2)"
+    versionRange="[26.1,26.3)"
     ordering="NONE"
     side="BOTH"
 

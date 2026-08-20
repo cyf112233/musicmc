@@ -3,8 +3,8 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component
  */
 class YaclFavScreen(private val back: Screen) : Screen(Component.literal("收藏")) {
 
-    private val mc get() = Minecraft.getInstance()
 
     private var folders: List<FavFolder>? = null
     private var error: String? = null
@@ -95,8 +94,8 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal("收藏
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
-        if (rectLoginBtn.hit(x, y)) { mc.setScreen(YaclLoginScreen(this)); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
+        if (rectLoginBtn.hit(x, y)) { McScreens.open(YaclLoginScreen(this)); return true }
         if (rectRefreshBtn.hit(x, y)) { load(); return true }
         val list = folders ?: return super.mouseClicked(event, doubleClick)
         if (list.isNotEmpty()) {
@@ -105,7 +104,7 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal("收藏
             if (x >= listX && x < listX + 360 && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
-                    mc.setScreen(YaclFavDetailScreen(list[row], this))
+                    McScreens.open(YaclFavDetailScreen(list[row], this))
                     return true
                 }
             }

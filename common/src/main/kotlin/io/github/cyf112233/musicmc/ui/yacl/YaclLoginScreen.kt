@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliHttp
 import io.github.cyf112233.musicmc.bilibili.QrStatus
+import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.util.Async
 import com.mojang.blaze3d.platform.NativeImage
@@ -96,7 +97,7 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
                         } else {
                             NetMusic.setBilibiliCookie(cookie)
                             status = "登录成功"
-                            runCatching { mc.setScreen(back) }
+                            runCatching { McScreens.open(back) }
                         }
                         return@run
                     }
@@ -163,7 +164,7 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal("登�
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
-        if (rectBackBtn.hit(x, y)) { mc.setScreen(back); return true }
+        if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectRefreshBtn.hit(x, y)) { startLogin(); return true }
         return super.mouseClicked(event, doubleClick)
     }
