@@ -43,7 +43,7 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
         // 列表
         val queue = player.queue
         if (queue.isEmpty()) {
-            g.drawText("队列为空,去搜索页添加歌曲", w / 2 - 110, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText("队列为空,去搜索页点一首歌即可加入", w / 2 - 130, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         val rowH = 20
@@ -73,7 +73,8 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal("播�
         if (queue.isNotEmpty()) {
             val rowH = 20
             val listX = 12
-            if (x >= listX && x < listX + 360 && y >= 40) {
+            val listW = width - 24
+            if (x >= listX && x < listX + listW && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in queue.indices) {
                     player.play(queue[row], queue.toList(), row)

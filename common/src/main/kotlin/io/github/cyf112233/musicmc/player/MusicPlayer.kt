@@ -98,14 +98,24 @@ class MusicPlayer(
 
     /**
      * 播放歌曲。可附带替换整个队列([queue])与指定下标([index])。
+     *
+     * 未附带队列(单曲播放:搜索页点歌 / 队列页点行 / 主界面控制按钮)时,
+     * 保证当前歌一定在队列里:
+     * - 队列为空 → 以当前歌为唯一元素;
+     * - 队列非空且当前歌已在其中(队列页点行/切歌) → 保持队列,index 定位;
+     * - 队列非空但当前歌不在(搜索播了新歌) → 追加到队尾并定位,
+     *   避免"队列页为空/高亮错位/上下首指向别的歌"的割裂。
      */
     fun play(song: Song, queue: List<Song>? = null, index: Int? = null) {
         val session = ++playSession
         if (queue != null) {
             this.queue.clear()
             this.queue.addAll(queue)
+        } else if (this.queue.none { it.id == song.id }) {
+            // 单曲播放且当前歌不在队列:确保队列可见(追加到队尾)
+            this.queue.add(song)
         }
-        this.index = index ?: this.queue.indexOf(song).let { if (it < 0) 0 else it }
+        this.index = index ?: this.queue.indexOfFirst { it.id == song.id }.let { if (it < 0) 0 else it }
         this.current = song
         this.state = PlayerState.LOADING
         notifyStateChanged()
