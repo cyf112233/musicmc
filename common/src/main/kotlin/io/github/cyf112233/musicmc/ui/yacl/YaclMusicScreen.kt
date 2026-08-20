@@ -239,7 +239,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     override fun isPauseScreen(): Boolean = false
 
     /** 拖动进度条时预览的 seek 目标(毫秒);未拖动时返回当前进度 */
-    private fun dragPreviewMs(posMs: Long, durMs: Int): Int {
+    private fun dragPreviewMs(posMs: Int, durMs: Int): Int {
         if (!draggingProgress) return posMs.toInt()
         val bar = rectProgress
         if (bar.x2 <= bar.x1 || durMs <= 0) return posMs.toInt()
