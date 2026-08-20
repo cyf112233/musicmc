@@ -166,13 +166,19 @@ class FfmpegAudioEngine : AudioEngine {
     /**
      * 停止当前会话。
      * @param join true(默认,stop/clearQueue/release):join 旧线程(至多 1.5s)确保立即静音、
-     *   资源同步释放;false(seek/切会话):只置标志 + 打断阻塞读 + 关 line 立即静音,
+     *   资源同步释放;false(seek/切会话):只置标志 + 打断阻塞读 + stop line 立即静音,
      *   不等待旧线程退出 —— 旧线程在自身 finally 关闭自己的 line/stream/decoder。
-     * 要点:此处**绝不** close 共享 decoder(原生指针只能由解码线程自清,
-     * 跨线程 close 是原生崩溃来源),只 interruptRead 打断阻塞读。
+     * 要点:
+     *  - 此处**绝不** close 共享 line / decoder:原生指针(AudioOutput / FfmpegDecoder)
+     *    只能由持有它的解码线程在 finally 自清。跨线程 close 与阻塞中的
+     *    AAudioStream_write 并发是 "decStrong() too many times" + SIGABRT 的根因
+     *    (2026-08 实测),native 层虽已加读写锁兜底(close 等待 write 返回),Java 侧
+     *    仍坚持"谁创建谁释放",避免渲染线程阻塞在 close 上;
+     *  - line.stop() 是幂等唤醒(AAudio requestStop / SourceDataLine stop),可任意线程调用,
+     *    立即静音并让阻塞 write 返回。
      */
     private fun stopInternal(join: Boolean = true) {
-        // 分步计时(置标志/打断读/line.stop/line.close/join);任一步 >100ms 时整条升为 warn
+        // 分步计时(置标志/打断读/line.stop/join);任一步 >100ms 时整条升为 warn
         val t0 = System.currentTimeMillis()
         stopped = true
         paused = false
@@ -184,16 +190,12 @@ class FfmpegAudioEngine : AudioEngine {
         // 打断预加载线程的阻塞读(独立下载流)
         runCatching { prefetchStream?.close() }
         val t2 = System.currentTimeMillis()
+        // 只 stop 不 close:唤醒阻塞 write + 立即静音;close 由解码线程 finally 执行
         try {
             line?.stop()
         } catch (_: Exception) {
         }
         val t3 = System.currentTimeMillis()
-        try {
-            line?.close()
-        } catch (_: Exception) {
-        }
-        val t4 = System.currentTimeMillis()
         val t = playbackThread
         if (join && t != null && t !== Thread.currentThread()) {
             try {
@@ -202,10 +204,10 @@ class FfmpegAudioEngine : AudioEngine {
                 Thread.currentThread().interrupt()
             }
         }
-        val t5 = System.currentTimeMillis()
+        val t4 = System.currentTimeMillis()
         playbackThread = null
-        val steps = "置标志=${t1 - t0}ms 打断读=${t2 - t1}ms line.stop=${t3 - t2}ms line.close=${t4 - t3}ms join=${t5 - t4}ms total=${t5 - t0}ms"
-        val hasSlowStep = (t1 - t0) > 100 || (t2 - t1) > 100 || (t3 - t2) > 100 || (t4 - t3) > 100 || (t5 - t4) > 100
+        val steps = "置标志=${t1 - t0}ms 打断读=${t2 - t1}ms line.stop=${t3 - t2}ms join=${t4 - t3}ms total=${t4 - t0}ms"
+        val hasSlowStep = (t1 - t0) > 100 || (t2 - t1) > 100 || (t3 - t2) > 100 || (t4 - t3) > 100
         val log = io.github.cyf112233.musicmc.NetMusic.logger
         if (hasSlowStep) log.warn("[Engine] stopInternal 慢步骤($steps)") else log.info("[Engine] stopInternal $steps")
     }

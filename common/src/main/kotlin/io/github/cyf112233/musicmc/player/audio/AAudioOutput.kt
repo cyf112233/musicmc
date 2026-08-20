@@ -1,6 +1,7 @@
 package io.github.cyf112233.musicmc.player.audio
 
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Android 专用音频输出:AAudio(NDK 原生通道,Android 8.0+ / API 26+)。
@@ -12,10 +13,22 @@ import java.io.IOException
  * - AAudio 独立于 OpenSL/OpenAL,无 Engine/设备/上下文共享,阻塞式写入语义与
  *   SourceDataLine 一致,确定稳定。
  *
- * 线程安全:JNI 调用无线程亲和要求(nativeStop/nativeRelease 可任意线程调用,
- * 会唤醒阻塞中的 nativeWrite),因此无需 owner 线程限定。
+ * 线程安全(2026-08 修复连续 seek 崩溃):每次创建分配唯一 [owner] token,经
+ * nativeInit / nativeRelease 传给原生层 —— 原生互斥锁保证 close 永不与并发 write
+ * 冲突,owner 保证旧会话迟到 release 不会误关新会话的流。JNI 调用无线程亲和
+ * (nativeStop 可任意线程,唤醒阻塞中的 nativeWrite)。
  */
 class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutput {
+
+    companion object {
+        private val NEXT_OWNER = AtomicLong(1)
+
+        /** 分配唯一会话 token(每创建一个 AAudioOutput 递增一次,不回绕) */
+        private fun nextOwner(): Long = NEXT_OWNER.getAndIncrement()
+    }
+
+    /** 本输出实例的会话 token(原生层据此隔离新旧会话的流) */
+    private val owner: Long = nextOwner()
 
     @Volatile
     private var closed = false
@@ -44,7 +57,7 @@ class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutp
     private fun ensureInited() {
         if (inited) return
         if (closed) throw IOException("音频输出已关闭")
-        if (AAudioPlayer.nativeInit(rate, channels) != 0) {
+        if (AAudioPlayer.nativeInit(owner, rate, channels) != 0) {
             throw IOException("AAudio 初始化失败(rate=$rate channels=$channels)")
         }
         inited = true
@@ -61,7 +74,7 @@ class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutp
         closed = true
         active = false
         runCatching { AAudioPlayer.nativeStop() }
-        runCatching { AAudioPlayer.nativeRelease() }
+        runCatching { AAudioPlayer.nativeRelease(owner) }
         inited = false
     }
 

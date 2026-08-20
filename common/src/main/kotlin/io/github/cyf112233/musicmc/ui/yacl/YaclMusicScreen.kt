@@ -40,7 +40,6 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     private val rectMode = YaclTheme.Rect(0, 0, 0, 0)
     private val rectProgress = YaclTheme.Rect(0, 0, 0, 0)
     private val rectVolume = YaclTheme.Rect(0, 0, 0, 0)
-    private val rectSearchEmpty = YaclTheme.Rect(0, 0, 0, 0)
 
     private var lastSongId: String? = null
 
@@ -51,6 +50,8 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     private var dragDurationMs = 0
     /** 最近一次拖动进度条的 x(拖动预览用;非拖动态无效) */
     private var lastDragX = 0.0
+    /** 拖动节流:seek 是"停旧会话开新会话",每帧触发会高频切会话,150ms 节流一次 */
+    private var lastSeekMs = 0L
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
         val g = GuiGraphicsHudGui(graphics)
@@ -175,11 +176,10 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val volLabel = if (draggingVolume) "音量 ${(volF * 100).toInt()}%" else "音量"
         g.drawText(volLabel, volX, ctrlY - 14, 10f, 1f, if (draggingVolume) YaclTheme.colorAccentBright else YaclTheme.colorTextDim)
 
-        // ---- 无歌曲:搜索入口 ----
+        // ---- 无歌曲:提示文字(顶部工具行已有「搜索」按钮,不重复放入口) ----
         if (song == null) {
             val emptyY = ctrlY + 40
-            rectSearchEmpty.set(panelX, emptyY, panelX + 110, emptyY + btnH)
-            YaclTheme.drawBtn(g, rectSearchEmpty, "搜索歌曲", mouseX, mouseY, accent = true)
+            g.drawText("点上方「搜索」搜索并播放", panelX, emptyY + 2, 11f, 1f, YaclTheme.colorTextSub)
         }
     }
 
@@ -213,17 +213,22 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
                 volumeFrom(x)
                 return true
             }
-            rectSearchEmpty.hit(x, y) -> { McScreens.open(YaclSearchScreen(this)); return true }
         }
         return super.mouseClicked(event, doubleClick)
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
         val x = event.x()
-        // 拖动态已锁定:无论指针是否仍在条身上,都按当前 x 持续 seek / 调音量
+        // 拖动态已锁定:无论指针是否仍在条身上,都按当前 x 持续 seek / 调音量。
+        // seek = 停旧会话开新会话,拖动期间每帧调用开销大且易抖动 → 150ms 节流,
+        // 但拖动预览(lastDragX)每次事件都更新,时间标签实时跟随。
         if (draggingProgress) {
             lastDragX = x
-            seekFrom(x)
+            val now = System.currentTimeMillis()
+            if (now - lastSeekMs >= 150) {
+                lastSeekMs = now
+                seekFrom(x)
+            }
             return true
         }
         if (draggingVolume) { volumeFrom(x); return true }
@@ -231,6 +236,12 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     }
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        // 松手时补一次最终 seek,保证停在精确位置(节流期间可能错过最后一次)
+        if (draggingProgress) {
+            val x = event.x()
+            lastDragX = x
+            seekFrom(x)
+        }
         draggingProgress = false
         draggingVolume = false
         return super.mouseReleased(event)
