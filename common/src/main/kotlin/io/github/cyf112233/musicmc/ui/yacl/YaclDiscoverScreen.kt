@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Playlist
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -13,7 +14,7 @@ import net.minecraft.network.chat.Component
  * YACL 版发现页:展示首页推荐Playlist(NetMusic.source.homePlaylists),
  * 点击Playlist进入详情页;视觉走 YaclTheme。
  */
-class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("Discover")) {
+class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal(UiText.t("发现", "Discover"))) {
 
 
     private var playlists: List<Playlist>? = null
@@ -42,12 +43,12 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("D
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
-        YaclTheme.drawCenteredTitle(g, "Discover", w / 2, 10)
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
+        YaclTheme.drawCenteredTitle(g, UiText.t("发现", "Discover"), w / 2, 10)
 
         val list = playlists
         if (list == null && error == null) {
-            g.drawText("Loading…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("加载中…", "Loading…"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
@@ -55,7 +56,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("D
             return
         }
         if (list!!.isEmpty()) {
-            g.drawText("No playlists yet", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("暂无推荐歌单", "No playlists yet"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         val rowH = 24
@@ -65,7 +66,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal("D
         var y = 40
         while (idx < list.size && y + rowH < h - 8) {
             val p = list[idx]
-            YaclTheme.drawListRow(g, p.name.ifBlank { "Unnamed playlist" }, "${p.trackCount} tracks", listX, y, listW, rowH, mouseX, mouseY)
+            YaclTheme.drawListRow(g, p.name.ifBlank { UiText.t("未命名歌单", "Unnamed playlist") }, UiText.t("${p.trackCount} 首", "${p.trackCount} tracks"), listX, y, listW, rowH, mouseX, mouseY)
             y += rowH
             idx++
         }

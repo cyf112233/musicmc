@@ -21,6 +21,7 @@ import icyllis.modernui.widget.SeekBar
 import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.player.PlayMode
 import io.github.cyf112233.musicmc.player.PlayerListener
@@ -83,7 +84,7 @@ class MusicMainFragment : Fragment() {
         }
 
         override fun onSongChanged(song: Song?) {
-            titleText?.text = song?.title ?: "Not Playing"
+            titleText?.text = song?.title ?: UiText.t("未在播放", "Not Playing")
             artistText?.text = song?.artist ?: ""
             progressSeek?.max = song?.durationMs ?: 0
             progressSeek?.progress = 0
@@ -171,7 +172,7 @@ class MusicMainFragment : Fragment() {
         toolbar.addView(searchInput, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
         val searchButton = Button(context, null, R.attr.buttonElevatedStyle).apply {
-            text = "Search"
+            text = UiText.t("搜索", "Search")
             setOnClickListener { search() }
             // 小窗口下避免 MUI horizontal constraints 不一致告警(按钮最小宽度过大所致)
             setMinimumWidth(dp(44f))
@@ -198,7 +199,7 @@ class MusicMainFragment : Fragment() {
             return super.onGenericMotionEvent(event)
         }
     }.apply {
-        hint = "Search Bilibili songs"
+        hint = UiText.t("搜索 B 站歌曲", "Search Bilibili songs")
         setTextSize(14f)
         setMinimumWidth(dp(160f))
         // 无 IME 管线:回车键直接触发搜索(统一走 Widgets.bindEnter)
@@ -211,11 +212,11 @@ class MusicMainFragment : Fragment() {
     private data class NavItem(val label: String, val index: Int)
 
     private val navItems = listOf(
-        NavItem("⌂ Discover", NAV_HOME),
-        NavItem("★ Favorites", NAV_FAV),
-        NavItem("≡ Queue", NAV_QUEUE),
-        NavItem("♪ Lyrics", NAV_LYRIC),
-        NavItem("⚙ Settings", NAV_SETTINGS),
+        NavItem(UiText.t("⌂ 发现", "⌂ Discover"), NAV_HOME),
+        NavItem(UiText.t("★ 收藏", "★ Favorites"), NAV_FAV),
+        NavItem(UiText.t("≡ 队列", "≡ Queue"), NAV_QUEUE),
+        NavItem(UiText.t("♪ 歌词", "♪ Lyrics"), NAV_LYRIC),
+        NavItem(UiText.t("⚙ 设置", "⚙ Settings"), NAV_SETTINGS),
     )
 
     /**
@@ -294,7 +295,7 @@ class MusicMainFragment : Fragment() {
     /** 我的收藏夹:未登录时 toast 并保持当前页(登录态在点击时检查,而非显示时) */
     private fun goFavFolders(): Boolean {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Widgets.toast(requireContext(), "Please log in to Bilibili in Settings first")
+            Widgets.toast(requireContext(), UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first"))
             return false
         }
         if (containerId == 0) return false
@@ -315,7 +316,7 @@ class MusicMainFragment : Fragment() {
     /** 歌词:未开启时 toast 提示(守卫同旧 HomeFragment 工具行) */
     private fun goLyric(): Boolean {
         if (!NetMusic.config.lyricsEnabled) {
-            Widgets.toast(requireContext(), "Lyrics are disabled, enable them in Settings")
+            Widgets.toast(requireContext(), UiText.t("歌词功能已关闭,请在设置中开启", "Lyrics are disabled, enable them in Settings"))
             return false
         }
         if (containerId == 0) return false
@@ -395,7 +396,7 @@ class MusicMainFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
         }
         titleText = TextView(context).apply {
-            text = "Not Playing"
+            text = UiText.t("未在播放", "Not Playing")
             setTextSize(14f)
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END
@@ -566,7 +567,7 @@ class MusicMainFragment : Fragment() {
         val song = NetMusic.player.current ?: return
         BiliActions.toggleLike(song) { liked, err ->
             likeButton?.text = if (liked) "♥" else "♡"
-            val msg = if (err != null) err else if (liked) "Liked" else "Like removed"
+            val msg = if (err != null) err else if (liked) UiText.t("已点赞", "Liked") else UiText.t("已取消点赞", "Like removed")
             if (isAdded) Widgets.toast(requireContext(), msg)
         }
     }
@@ -574,7 +575,7 @@ class MusicMainFragment : Fragment() {
     /** 点击收藏按钮:打开收藏夹选择器(浏览/选择/新建/取消;不再默认夹一键收藏) */
     private fun openFavPicker() {
         if (NetMusic.player.current == null) {
-            Widgets.toast(requireContext(), "Play a song first")
+            Widgets.toast(requireContext(), UiText.t("请先播放歌曲", "Play a song first"))
             return
         }
         if (containerId == 0) return

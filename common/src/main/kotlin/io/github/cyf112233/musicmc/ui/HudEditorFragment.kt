@@ -24,6 +24,7 @@ import icyllis.modernui.widget.LinearLayout
 import icyllis.modernui.widget.SeekBar
 import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.platform.PlatformHolder
 import io.github.cyf112233.musicmc.ui.hud.HudFrame
@@ -86,7 +87,7 @@ class HudEditorFragment : Fragment() {
 
         // ---- HUD 整体缩放(50..200% → /100f,实时生效) ----
         val scaleText = TextView(context).apply {
-            text = "Scale: ${(NetMusic.config.hudScale * 100).toInt()}%"
+            text = UiText.t("缩放: ${(NetMusic.config.hudScale * 100).toInt()}%", "Scale: ${(NetMusic.config.hudScale * 100).toInt()}%")
             setTextSize(13f)
             setMinimumWidth(dp(96f))
         }
@@ -98,7 +99,7 @@ class HudEditorFragment : Fragment() {
                 // 去掉后程序性回写/其他输入路径同样实时应用,updateConfig 幂等无害)
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                     val pct = progress + 50
-                    scaleText.text = "Scale: $pct%"
+                    scaleText.text = UiText.t("缩放: $pct%", "Scale: $pct%")
                     NetMusic.updateConfig { it.copy(hudScale = pct / 100f) }
                     preview?.invalidate()
                 }
@@ -119,12 +120,12 @@ class HudEditorFragment : Fragment() {
         }
         btnRow.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "Reset Position"
+                text = UiText.t("重置位置", "Reset Position")
                 setOnClickListener {
                     NetMusic.updateConfig { it.copy(hudX = 0.92f, hudY = 0.86f) }
                     preview?.syncAnchor()
                     preview?.invalidate()
-                    Widgets.toast(context, "HUD position reset")
+                    Widgets.toast(context, UiText.t("HUD 位置已重置", "HUD position reset"))
                 }
             },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
@@ -133,7 +134,7 @@ class HudEditorFragment : Fragment() {
         )
         btnRow.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "Done"
+                text = UiText.t("完成", "Done")
                 setOnClickListener {
                     PlatformHolder.require().closeScreen()
                 }
@@ -565,7 +566,7 @@ class HudEditorFragment : Fragment() {
                 setTextSize(dp(14f).toFloat())
                 setColor(0x99FFFFFF.toInt())
             }
-            val msg = "Play music to preview the HUD here"
+            val msg = UiText.t("播放音乐后在此预览 HUD", "Play music to preview the HUD here")
             val layout = StaticLayout.builder(msg, 0, msg.length, paint, (w - dp(32f)).coerceAtLeast(1))
                 .setMaxLines(2)
                 .setEllipsize(TextUtils.TruncateAt.END)

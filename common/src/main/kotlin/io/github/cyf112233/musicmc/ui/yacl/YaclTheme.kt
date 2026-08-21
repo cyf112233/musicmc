@@ -1,6 +1,7 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 
 /**
  * YACL 版界面共享主题:配色与绘制辅助。
@@ -101,7 +102,7 @@ object YaclTheme {
     fun drawCoverPlaceholder(g: GuiGraphicsHudGui, x: Int, y: Int, size: Int) {
         fillRound(g, x, y, size, size, 4, colorBtn, colorCardBorder)
         g.drawText("♪", x + size / 2 - 6, y + size / 2 - 8, 16f, 1f, colorTextFaint)
-        g.drawText("No Cover", x + 4, y + size - 12, 8f, 1f, colorTextFaint)
+        g.drawText(UiText.t("暂无封面", "No Cover"), x + 4, y + size - 12, 8f, 1f, colorTextFaint)
     }
 
     /**
@@ -273,7 +274,7 @@ object YaclTheme {
             }
             textX = x + 4 + coverSize + 6
         }
-        drawTextClipped(g, title.ifBlank { "Unknown" }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
+        drawTextClipped(g, title.ifBlank { io.github.cyf112233.musicmc.client.UiText.t("未知标题", "Unknown") }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
         drawTextClipped(g, artist, textX, y + 12, 9f, x + w - textX - 6, colorTextDim)
     }
 
@@ -297,12 +298,12 @@ object YaclTheme {
         } else if (hover) {
             g.fill(x, y, x + w, y + rowH, colorRowHover)
         }
-        drawTextClipped(g, title.ifBlank { "Unnamed" }, x + 6, y + 2, 11f, w - 12, colorTextMain)
+        drawTextClipped(g, title.ifBlank { io.github.cyf112233.musicmc.client.UiText.t("未命名", "Unnamed") }, x + 6, y + 2, 11f, w - 12, colorTextMain)
         drawTextClipped(g, sub, x + 6, y + 14, 9f, w - 12, colorTextDim)
     }
 
     /** 列表底部滚动提示 */
     fun drawScrollHint(g: GuiGraphicsHudGui, w: Int, h: Int) {
-        g.drawText("Scroll for more", w / 2 + 100, h - 18, 9f, 1f, colorTextFaint)
+        g.drawText(UiText.t("↑↓ 滚动查看更多", "Scroll for more"), w / 2 + 100, h - 18, 9f, 1f, colorTextFaint)
     }
 }

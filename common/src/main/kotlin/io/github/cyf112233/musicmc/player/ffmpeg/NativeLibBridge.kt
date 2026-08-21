@@ -1,5 +1,6 @@
 package io.github.cyf112233.musicmc.player.ffmpeg
 
+import io.github.cyf112233.musicmc.client.UiText
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -166,7 +167,7 @@ object NativeLibBridge {
             if (isExecCapable(c)) return c
         }
         if (cacheDirOverride?.isNotBlank() == true) {
-            warn("Specified native lib dir unavailable (missing/not writable/not executable): $cacheDirOverride, falling back to auto detection")
+            warn(UiText.t("指定的原生库目录不可用(缺失/不可写/不可执行): $cacheDirOverride,已回退自动检测", "Specified native lib dir unavailable (missing/not writable/not executable): $cacheDirOverride, falling back to auto detection"))
         }
         return baseDir
     }
@@ -211,7 +212,7 @@ object NativeLibBridge {
                 for (res in RESOURCES) {
                     val out = extractDir.resolve(res.substringAfterLast('/'))
                     val input = openResource(res) ?: run {
-                        warn("Missing native lib resource for $subDir: $res")
+                        warn(UiText.t("缺少 $subDir 原生库资源: $res", "Missing native lib resource for $subDir: $res"))
                         return
                     }
                     input.use { Files.copy(it, out, StandardCopyOption.REPLACE_EXISTING) }
@@ -228,7 +229,7 @@ object NativeLibBridge {
         } catch (t: Throwable) {
             // UnsatisfiedLinkError / IOException / 权限等:一律视为不可用,
             // 上层(FfmpegDecoder.nativeAvailable)报"平台不支持播放"
-            warn("Manual native lib load failed for $subDir: ${t.javaClass.simpleName}: ${t.message}")
+            warn(UiText.t("$subDir 原生库手动加载失败: ${t.javaClass.simpleName}: ${t.message}", "Manual native lib load failed for $subDir: ${t.javaClass.simpleName}: ${t.message}"))
         }
     }
 
@@ -293,12 +294,12 @@ object NativeLibBridge {
             if (!audioLoaded) {
                 // 资源缺失:清掉可能残留的旧库,宁可不加载也不加载错签名
                 runCatching { Files.deleteIfExists(audioFile) }
-                warn("Missing audio output lib for $platform: $audioRes (Android will have no sound)")
+                warn(UiText.t("缺少 $platform 音频输出库资源: $audioRes (Android 将无声音)", "Missing audio output lib for $platform: $audioRes (Android will have no sound)"))
             } else if (Files.exists(audioFile)) {
                 System.load(audioFile.toString())
                 info("$platform 音频输出库已加载(AAudio)")
             } else {
-                warn("Missing audio output lib for $platform: $audioRes (Android will have no sound)")
+                warn(UiText.t("缺少 $platform 音频输出库资源: $audioRes (Android 将无声音)", "Missing audio output lib for $platform: $audioRes (Android will have no sound)"))
             }
 
             // 主动触发 avutil <clinit>(→ Loader.load()):让库在 mod 加载阶段就绪,
@@ -315,9 +316,9 @@ object NativeLibBridge {
                 }
             }
             if (done) info("$platform 原生库已由 javacpp Loader 加载")
-            else warn("$platform failed to trigger javacpp Loader load (avutil class unreachable), will retry at playback time")
+            else warn(UiText.t("$platform 触发 javacpp Loader 加载失败(avutil 类不可达),播放时将重试", "$platform failed to trigger javacpp Loader load (avutil class unreachable), will retry at playback time"))
         } catch (t: Throwable) {
-            warn("$platform javacpp Loader preparation failed: ${t.javaClass.simpleName}: ${t.message}")
+            warn(UiText.t("$platform javacpp Loader 准备失败: ${t.javaClass.simpleName}: ${t.message}", "$platform javacpp Loader preparation failed: ${t.javaClass.simpleName}: ${t.message}"))
         }
     }
 

@@ -11,6 +11,7 @@ import io.github.cyf112233.musicmc.platform.ModPlatform
 import io.github.cyf112233.musicmc.platform.PlatformHolder
 import io.github.cyf112233.musicmc.player.MusicPlayer
 import io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge
+import io.github.cyf112233.musicmc.client.UiText
 
 /**
  * 模块入口。loader(fabric/neoforge)在客户端初始化时调用 [init] 注入平台实现。
@@ -91,7 +92,7 @@ object NetMusic {
      */
     fun getLyrics(song: Song, callback: (List<LyricLine>, String?) -> Unit) {
         if (!config.lyricsEnabled) {
-            callback(emptyList(), "Lyrics are disabled")
+            callback(emptyList(), UiText.t("歌词功能已禁用", "Lyrics are disabled"))
             return
         }
         LyricManager.load(song) { result, err ->

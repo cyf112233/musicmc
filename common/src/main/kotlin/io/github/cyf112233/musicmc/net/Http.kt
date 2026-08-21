@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.net
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.github.cyf112233.musicmc.client.UiText
 import java.io.IOException
 import java.io.InputStream
 import java.net.URI
@@ -57,14 +58,14 @@ object Http {
 
     private fun checkStatus(status: Int, url: String) {
         if (status !in 200..299) {
-            throw IOException("HTTP $status for $url")
+            throw IOException(UiText.t("HTTP $status 请求失败: $url", "HTTP $status for $url"))
         }
     }
 
     private fun parseJson(body: String, url: String): JsonObject {
         val element = JsonParser.parseString(body)
         return if (element.isJsonObject) element.asJsonObject
-        else throw IOException("Response is not a JSON object: $url")
+        else throw IOException(UiText.t("响应不是 JSON 对象: $url", "Response is not a JSON object: $url"))
     }
 
     /** 基础请求头;referer 非空时覆盖默认 Referer;extraHeaders 覆盖同名头(如歌词源的专属 UA) */
@@ -212,11 +213,11 @@ object Http {
             416 -> {
                 // 先关掉响应体再抛,避免泄漏连接
                 runCatching { response.body().close() }
-                throw IOException("Range out of bounds")
+                throw IOException(UiText.t("范围越界", "Range out of bounds"))
             }
             else -> {
                 runCatching { response.body().close() }
-                throw IOException("HTTP ${response.statusCode()} for $url")
+                throw IOException(UiText.t("HTTP ${response.statusCode()} 请求失败: $url", "HTTP ${response.statusCode()} for $url"))
             }
         }
     }

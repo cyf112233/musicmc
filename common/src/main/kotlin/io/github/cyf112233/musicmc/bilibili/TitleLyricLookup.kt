@@ -6,6 +6,7 @@ import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.net.Http
 import io.github.cyf112233.musicmc.util.Async
 import io.github.cyf112233.musicmc.util.Lrc
+import io.github.cyf112233.musicmc.client.UiText
 
 /**
  * 标题匹配歌词:把歌曲标题经网易云无登录 plain 接口(与 BBPlayer 歌词来源同思路)
@@ -51,12 +52,12 @@ object TitleLyricLookup {
             try {
                 val keyword = cleanTitle(title)
                 if (keyword.isBlank()) {
-                    callback(emptyList(), "No matching lyrics found")
+                    callback(emptyList(), UiText.t("未找到匹配歌词", "No matching lyrics found"))
                     return@execute
                 }
                 val songs = search(keyword)
                 if (songs.isEmpty()) {
-                    callback(emptyList(), "No matching lyrics found")
+                    callback(emptyList(), UiText.t("未找到匹配歌词", "No matching lyrics found"))
                     return@execute
                 }
                 // 相似度降序(稳定排序保持网易云排序),逐个候选取歌词:跳过无歌词的候选
@@ -67,9 +68,9 @@ object TitleLyricLookup {
                         return@execute
                     }
                 }
-                callback(emptyList(), "No matching lyrics found")
+                callback(emptyList(), UiText.t("未找到匹配歌词", "No matching lyrics found"))
             } catch (e: Exception) {
-                callback(emptyList(), "Failed to match lyrics by title")
+                callback(emptyList(), UiText.t("标题匹配歌词失败", "Failed to match lyrics by title"))
             }
         }
     }

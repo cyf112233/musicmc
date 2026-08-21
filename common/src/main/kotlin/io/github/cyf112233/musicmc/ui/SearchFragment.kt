@@ -14,6 +14,7 @@ import icyllis.modernui.widget.ListView
 import icyllis.modernui.widget.TextView
 import icyllis.modernui.widget.Toast
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.util.Async
 
 /**
@@ -31,14 +32,14 @@ class SearchFragment : Fragment() {
         }
 
         val loading = TextView(context).apply {
-            text = "Searching..."
+            text = UiText.t("搜索中…", "Searching...")
             setTextSize(15f)
             gravity = Gravity.CENTER
         }
         root.addView(loading, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
 
         val emptyView = TextView(context).apply {
-            text = "No related songs found"
+            text = UiText.t("未找到相关歌曲", "No related songs found")
             setTextSize(16f)
             gravity = Gravity.CENTER
             visibility = View.GONE
@@ -54,7 +55,7 @@ class SearchFragment : Fragment() {
                 Async.onUi {
                     loading.visibility = View.GONE
                     if (err != null) {
-                        Toast.makeText(context, "Search failed: $err", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, UiText.t("搜索失败: $err", "Search failed: $err"), Toast.LENGTH_SHORT).show()
                     } else if (results.isEmpty()) {
                         emptyView.visibility = View.VISIBLE
                     } else {

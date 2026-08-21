@@ -17,6 +17,7 @@ import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Song
 
 /**
@@ -52,7 +53,7 @@ class FavFolderDetailFragment : Fragment() {
         )
         root.addView(
             TextView(context).apply {
-                text = "${folder.mediaCount} items"
+                text = UiText.t("${folder.mediaCount} 个内容", "${folder.mediaCount} items")
                 setTextSize(13f)
                 setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
                 setPadding(dp(16f), 0, dp(16f), dp(8f))
@@ -61,7 +62,7 @@ class FavFolderDetailFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "Loading…"
+            text = UiText.t("加载中…", "Loading…")
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(dp(16f), dp(16f), dp(16f), dp(16f))
@@ -92,10 +93,10 @@ class FavFolderDetailFragment : Fragment() {
             if (!isAdded) return@folderSongs
             if (err != null) {
                 if (songs.isEmpty()) {
-                    statusText?.text = "Failed to load: $err"
+                    statusText?.text = UiText.t("加载失败: $err", "Failed to load: $err")
                     statusText?.visibility = View.VISIBLE
                 } else {
-                    Widgets.toast(requireContext(), "Failed to load more: $err")
+                    Widgets.toast(requireContext(), UiText.t("加载更多失败: $err", "Failed to load more: $err"))
                 }
                 return@folderSongs
             }
@@ -109,7 +110,7 @@ class FavFolderDetailFragment : Fragment() {
     private fun bind() {
         if (!isAdded) return
         if (songs.isEmpty()) {
-            statusText?.text = "Folder is empty"
+            statusText?.text = UiText.t("收藏夹暂无内容", "Folder is empty")
             statusText?.visibility = View.VISIBLE
             return
         }

@@ -2,6 +2,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Playlist
@@ -18,7 +19,7 @@ import net.minecraft.network.chat.Component
 class YaclPlaylistScreen(
     private val playlist: Playlist,
     private val back: Screen,
-) : Screen(Component.literal("Playlist")) {
+) : Screen(Component.literal(UiText.t("歌单", "Playlist"))) {
 
     private val player get() = NetMusic.player
 
@@ -53,15 +54,15 @@ class YaclPlaylistScreen(
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
-        val title = playlist.name.ifBlank { "Unnamed playlist" }
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
+        val title = playlist.name.ifBlank { UiText.t("未命名歌单", "Unnamed playlist") }
         YaclTheme.drawCenteredTitle(g, title, w / 2, 10)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectPlayAllBtn, "Play All", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectPlayAllBtn, UiText.t("播放全部", "Play All"), mouseX, mouseY, accent = true)
 
         val list = songs
         if (list == null && error == null) {
-            g.drawText("Loading songs…", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("加载歌曲中…", "Loading songs…"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
@@ -69,7 +70,7 @@ class YaclPlaylistScreen(
             return
         }
         if (list!!.isEmpty()) {
-            g.drawText("No songs in this playlist", w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("歌单暂无歌曲", "No songs in this playlist"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
 RowCoverCache.pump()

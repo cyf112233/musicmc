@@ -6,6 +6,7 @@ import io.github.cyf112233.musicmc.net.Http
 import io.github.cyf112233.musicmc.player.ffmpeg.ImageDecoder
 import io.github.cyf112233.musicmc.player.ffmpeg.RgbaImage
 import io.github.cyf112233.musicmc.util.Async
+import io.github.cyf112233.musicmc.client.UiText
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.AbstractTexture
 import net.minecraft.client.renderer.texture.DynamicTexture
@@ -235,7 +236,7 @@ object CoverTextureCache {
         }
         try {
             val bi = ImageIO.read(ByteArrayInputStream(bytes))
-                ?: throw IOException("ImageIO cannot recognize image format")
+                ?: throw IOException(UiText.t("ImageIO 无法识别图片格式", "ImageIO cannot recognize image format"))
             val img = copyArgbToNativeImage(bi)
             logInfo("ImageIO 回退解码成功:${img.getWidth()}x${img.getHeight()} url=${urlTag(url)}")
             return img

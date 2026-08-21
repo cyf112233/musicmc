@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.CoverTextureCache
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.player.PlayerState
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.ui.Widgets
@@ -80,13 +81,13 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         rectQueue.set(w - 5 * topBtnW - 20, topBtnY, w - 4 * topBtnW - 16, topBtnY + topBtnH)
         rectDiscover.set(w - 6 * topBtnW - 24, topBtnY, w - 5 * topBtnW - 20, topBtnY + topBtnH)
         rectSearch.set(w - 7 * topBtnW - 28, topBtnY, w - 6 * topBtnW - 24, topBtnY + topBtnH)
-        YaclTheme.drawPill(g, rectSearch, "Search", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectDiscover, "Discover", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectQueue, "Queue", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectFav, "Favorites", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectLyrics, "Lyrics", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectSettings, "Settings", mouseX, mouseY)
-        YaclTheme.drawPill(g, rectClose, "Close", mouseX, mouseY)
+        YaclTheme.drawPill(g, rectSearch, UiText.t("搜索", "Search"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectDiscover, UiText.t("发现", "Discover"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectQueue, UiText.t("队列", "Queue"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectFav, UiText.t("收藏", "Favorites"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectLyrics, UiText.t("歌词", "Lyrics"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectSettings, UiText.t("设置", "Settings"), mouseX, mouseY)
+        YaclTheme.drawPill(g, rectClose, UiText.t("关闭", "Close"), mouseX, mouseY)
 
         // ---- 中部卡片:封面 + 曲目信息 ----
         val panelX = (w - 340).coerceAtLeast(8) / 2
@@ -113,22 +114,22 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             // 标题/艺术家/专辑:超出可用宽度时省略号截断;标题额外支持横向滚动
             // (拖动/播放中长标题往返滚动显示全名,见 drawMarqueeText)
             val maxTextW = (panelX + panelW - 8) - textX
-            YaclTheme.drawMarqueeText(g, song.title.ifBlank { "Unknown" }, textX, titleY, 16f, maxTextW, YaclTheme.colorTextMain)
+            YaclTheme.drawMarqueeText(g, song.title.ifBlank { UiText.t("未知标题", "Unknown") }, textX, titleY, 16f, maxTextW, YaclTheme.colorTextMain)
             YaclTheme.drawTextClipped(g, song.artist, textX, artistY, 12f, maxTextW, YaclTheme.colorTextSub)
             if (song.album.isNotBlank()) {
                 YaclTheme.drawTextClipped(g, song.album, textX, albumY, 12f, maxTextW, YaclTheme.colorTextDim)
             }
             val (stateText, stateColor) = when (player.state) {
-                PlayerState.PLAYING -> "Playing" to YaclTheme.colorAccentBright
-                PlayerState.PAUSED -> "Paused" to YaclTheme.colorWarn
-                PlayerState.LOADING -> "Loading…" to YaclTheme.colorTextSub
-                PlayerState.ERROR -> "Playback Error" to YaclTheme.colorError
-                else -> "Idle" to YaclTheme.colorTextDim
+                PlayerState.PLAYING -> UiText.t("播放中", "Playing") to YaclTheme.colorAccentBright
+                PlayerState.PAUSED -> UiText.t("已暂停", "Paused") to YaclTheme.colorWarn
+                PlayerState.LOADING -> UiText.t("加载中…", "Loading…") to YaclTheme.colorTextSub
+                PlayerState.ERROR -> UiText.t("播放出错", "Playback Error") to YaclTheme.colorError
+                else -> UiText.t("未播放", "Idle") to YaclTheme.colorTextDim
             }
             g.drawText(stateText, textX, stateY, 12f, 1f, stateColor)
         } else {
-            g.drawText("Not Playing", textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
-            g.drawText("Search above to play", textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
+            g.drawText(UiText.t("未在播放", "Not Playing"), textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
+            g.drawText(UiText.t("点上方「搜索」搜索并播放", "Search above to play"), textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
         }
 
         // ---- 进度条 + 时间(拖动中显示目标时间) ----
@@ -162,7 +163,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         YaclTheme.drawBtn(g, rectPlay, if (player.state == PlayerState.PLAYING) "||" else ">", mouseX, mouseY, accent = true)
         YaclTheme.drawBtn(g, rectNext, ">>", mouseX, mouseY)
 
-        val modeLabel = "Mode:" + Widgets.playModeLabel(player.mode)
+        val modeLabel = Widgets.playModeLabel(player.mode)
         val modeW = 96
         rectMode.set(panelX + 3 * btnW + 3 * gap, ctrlY, panelX + 3 * btnW + 3 * gap + modeW, ctrlY + btnH)
         YaclTheme.drawBtn(g, rectMode, modeLabel, mouseX, mouseY)
@@ -178,13 +179,13 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             hoverable = true, active = draggingVolume, color = YaclTheme.colorAccent,
             showThumb = true,
         )
-        val volLabel = if (draggingVolume) "Volume ${(volF * 100).toInt()}%" else "Volume"
+        val volLabel = if (draggingVolume) "${UiText.t("音量", "Volume")} ${(volF * 100).toInt()}%" else UiText.t("音量", "Volume")
         YaclTheme.drawTextClipped(g, volLabel, volX, ctrlY - 14, 10f, volW, if (draggingVolume) YaclTheme.colorAccentBright else YaclTheme.colorTextDim)
 
         // ---- 无歌曲:提示文字(顶部工具行已有「搜索」按钮,不重复放入口) ----
         if (song == null) {
             val emptyY = ctrlY + 40
-            g.drawText("Search above to play", panelX, emptyY + 2, 11f, 1f, YaclTheme.colorTextSub)
+            g.drawText(UiText.t("点上方「搜索」搜索并播放", "Search above to play"), panelX, emptyY + 2, 11f, 1f, YaclTheme.colorTextSub)
         }
     }
 

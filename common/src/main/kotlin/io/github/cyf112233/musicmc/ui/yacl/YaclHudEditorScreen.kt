@@ -4,6 +4,7 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.CoverTextureCache
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.player.PlayerState
 import io.github.cyf112233.musicmc.ui.Widgets
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -18,7 +19,7 @@ import net.minecraft.network.chat.Component
  * 面板预览简化自 MusicHudRenderer 布局(封面占位 + 歌名 + 进度条);
  * 拖动时面板跟随鼠标,所见即所得。
  */
-class YaclHudEditorScreen : Screen(Component.literal("HUD Editor")) {
+class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "HUD Editor"))) {
 
     private val config get() = NetMusic.config
 
@@ -68,7 +69,7 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD Editor")) {
         val titleMaxW = (px + panelW - 4 - textX).coerceAtLeast(40)
         YaclTheme.drawTextClipped(
             g,
-            song?.title?.ifBlank { "Unknown" } ?: "Not Playing",
+            song?.title?.ifBlank { UiText.t("未知标题", "Unknown") } ?: UiText.t("未在播放", "Not Playing"),
             textX,
             py + 4,
             (10 * scale).coerceAtLeast(6f),
@@ -76,11 +77,11 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD Editor")) {
             YaclTheme.colorTextMain,
         )
         val stateText = when (NetMusic.player.state) {
-            PlayerState.PLAYING -> "Playing"
-            PlayerState.PAUSED -> "Paused"
-            PlayerState.LOADING -> "Loading…"
-            PlayerState.ERROR -> "Playback Error"
-            else -> "Idle"
+            PlayerState.PLAYING -> UiText.t("播放中", "Playing")
+            PlayerState.PAUSED -> UiText.t("已暂停", "Paused")
+            PlayerState.LOADING -> UiText.t("加载中…", "Loading…")
+            PlayerState.ERROR -> UiText.t("播放出错", "Playback Error")
+            else -> UiText.t("未播放", "Idle")
         }
         YaclTheme.drawTextClipped(g, stateText, textX, py + 4 + (16 * scale).toInt(), (8 * scale).coerceAtLeast(5f), titleMaxW, YaclTheme.colorAccentBright)
 
@@ -102,8 +103,8 @@ class YaclHudEditorScreen : Screen(Component.literal("HUD Editor")) {
         // 按钮:重置 / 完成
         rectReset.set(w - 160, h - 30, w - 86, h - 8)
         rectDone.set(w - 78, h - 30, w - 12, h - 8)
-        YaclTheme.drawBtn(g, rectReset, "Reset Pos", mouseX, mouseY)
-        YaclTheme.drawBtn(g, rectDone, "Done", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectReset, UiText.t("重置位置", "Reset Pos"), mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectDone, UiText.t("完成", "Done"), mouseX, mouseY, accent = true)
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {

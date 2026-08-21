@@ -1,5 +1,6 @@
 package io.github.cyf112233.musicmc.player.audio
 
+import io.github.cyf112233.musicmc.client.UiText
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 
@@ -47,7 +48,7 @@ class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutp
         if (closed || len <= 0) return
         ensureInited()
         if (AAudioPlayer.nativeWrite(data, off, len) != 0) {
-            throw IOException("AAudio write failed")
+            throw IOException(UiText.t("AAudio 音频写入失败", "AAudio write failed"))
         }
         active = true
         AAudioPlayer.nativeSetVolume(targetVolume)
@@ -56,9 +57,9 @@ class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutp
     /** 首次写数据时(播放线程)打开 AAudioStream */
     private fun ensureInited() {
         if (inited) return
-        if (closed) throw IOException("Audio output closed")
+        if (closed) throw IOException(UiText.t("音频输出已关闭", "Audio output closed"))
         if (AAudioPlayer.nativeInit(owner, rate, channels) != 0) {
-            throw IOException("AAudio init failed (rate=$rate channels=$channels)")
+            throw IOException(UiText.t("AAudio 初始化失败(rate=$rate channels=$channels)", "AAudio init failed (rate=$rate channels=$channels)"))
         }
         inited = true
         AAudioPlayer.nativeSetVolume(targetVolume)

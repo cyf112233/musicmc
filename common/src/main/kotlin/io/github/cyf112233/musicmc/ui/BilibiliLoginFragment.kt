@@ -19,6 +19,7 @@ import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliHttp
 import io.github.cyf112233.musicmc.bilibili.QrStatus
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.util.Async
 import io.github.cyf112233.musicmc.util.QrCode
 
@@ -50,7 +51,7 @@ class BilibiliLoginFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "Bilibili Login"
+                text = UiText.t("B 站登录", "Bilibili Login")
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(0, 0, 0, dp(16f))
             },
@@ -67,7 +68,7 @@ class BilibiliLoginFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "Generating QR code…"
+            text = UiText.t("正在生成二维码…", "Generating QR code…")
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(0, dp(16f), 0, dp(8f))
@@ -77,7 +78,7 @@ class BilibiliLoginFragment : Fragment() {
 
         root.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "Refresh QR Code"
+                text = UiText.t("刷新二维码", "Refresh QR Code")
                 setOnClickListener { startLogin() }
             },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT),
@@ -96,7 +97,7 @@ class BilibiliLoginFragment : Fragment() {
     /** 生成二维码并启动 2s 轮询(新会话 generation 自增,旧会话作废) */
     private fun startLogin() {
         val gen = ++generation
-        statusText?.text = "Generating QR code…"
+        statusText?.text = UiText.t("正在生成二维码…", "Generating QR code…")
         Async.executor.execute {
             try {
                 val qr = BiliHttp.qrGenerate()
@@ -114,7 +115,7 @@ class BilibiliLoginFragment : Fragment() {
             } catch (e: Exception) {
                 Async.onUi {
                     if (gen != generation || !isAdded) return@onUi
-                    statusText?.text = "Failed to generate QR code: ${e.message ?: "network error"}"
+                    statusText?.text = UiText.t("生成二维码失败: ${e.message ?: "网络错误"}", "Failed to generate QR code: ${e.message ?: "network error"}")
                 }
             }
         }
@@ -135,11 +136,11 @@ class BilibiliLoginFragment : Fragment() {
                             if (gen != generation || !isAdded) return@onUi
                             val cookie = result.cookieHeader
                             if (cookie.isNullOrBlank()) {
-                                statusText?.text = "Login failed: no login cookie obtained"
+                                statusText?.text = UiText.t("登录失败:未获取到登录 Cookie", "Login failed: no login cookie obtained")
                             } else {
                                 NetMusic.setBilibiliCookie(cookie)
-                                statusText?.text = "Login successful"
-                                Widgets.toast(requireContext(), "Login successful")
+                                statusText?.text = UiText.t("登录成功", "Login successful")
+                                Widgets.toast(requireContext(), UiText.t("登录成功", "Login successful"))
                                 refreshNickname()
                                 runCatching { parentFragmentManager.popBackStack() }
                             }
@@ -149,26 +150,26 @@ class BilibiliLoginFragment : Fragment() {
                     QrStatus.EXPIRED -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "QR code expired, please refresh"
+                            statusText?.text = UiText.t("二维码已过期,请点击刷新", "QR code expired, please refresh")
                         }
                         return@execute
                     }
                     QrStatus.SCANNED -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "Scanned, please confirm on your phone"
+                            statusText?.text = UiText.t("已扫码,请在手机上确认", "Scanned, please confirm on your phone")
                         }
                     }
                     QrStatus.WAIT -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "Waiting for scan…"
+                            statusText?.text = UiText.t("等待扫码…", "Waiting for scan…")
                         }
                     }
                     null -> {
                         Async.onUi {
                             if (gen != generation || !isAdded) return@onUi
-                            statusText?.text = "Polling failed, retrying automatically…"
+                            statusText?.text = UiText.t("轮询失败,自动重试…", "Polling failed, retrying automatically…")
                         }
                     }
                 }
@@ -187,7 +188,7 @@ class BilibiliLoginFragment : Fragment() {
             val nick = NetMusic.bilibiliNickname()
             Async.onUi {
                 if (!isAdded) return@onUi
-                statusText?.text = if (nick.isNullOrBlank()) "Login successful" else "Login successful ($nick)"
+                statusText?.text = if (nick.isNullOrBlank()) UiText.t("登录成功", "Login successful") else UiText.t("登录成功 ($nick)", "Login successful ($nick)")
             }
         }
     }

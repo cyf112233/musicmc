@@ -16,6 +16,7 @@ import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
+import io.github.cyf112233.musicmc.client.UiText
 
 /**
  * 我的收藏夹页(首页工具行"收藏"进入):全部收藏夹列表(名称 + "N 个内容"),
@@ -39,7 +40,7 @@ class FavFoldersFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "My Favorites"
+                text = UiText.t("我的收藏", "My Favorites")
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(dp(16f), dp(12f), dp(16f), dp(8f))
             },
@@ -47,7 +48,7 @@ class FavFoldersFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "Loading…"
+            text = UiText.t("加载中…", "Loading…")
             setTextSize(14f)
             gravity = Gravity.CENTER
             setPadding(dp(16f), dp(16f), dp(16f), dp(16f))
@@ -67,22 +68,22 @@ class FavFoldersFragment : Fragment() {
     /** 加载收藏夹列表;未登录(入口已隐藏,防御性守卫)显示提示 */
     private fun load() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            statusText?.text = "Please log in to Bilibili in Settings first"
+            statusText?.text = UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")
             statusText?.visibility = View.VISIBLE
             listView?.visibility = View.GONE
             return
         }
-        statusText?.text = "Loading…"
+        statusText?.text = UiText.t("加载中…", "Loading…")
         BiliActions.folders { list, err ->
             if (!isAdded) return@folders
             if (err != null) {
-                statusText?.text = "Failed to load: $err"
+                statusText?.text = UiText.t("加载失败: $err", "Failed to load: $err")
                 statusText?.visibility = View.VISIBLE
                 return@folders
             }
             folders = list.toMutableList()
             if (folders.isEmpty()) {
-                statusText?.text = "No favorites yet"
+                statusText?.text = UiText.t("暂无收藏夹", "No favorites yet")
                 statusText?.visibility = View.VISIBLE
             } else {
                 statusText?.visibility = View.GONE

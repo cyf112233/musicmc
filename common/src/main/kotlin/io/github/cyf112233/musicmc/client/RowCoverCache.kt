@@ -5,6 +5,7 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.net.Http
 import io.github.cyf112233.musicmc.player.ffmpeg.ImageDecoder
 import io.github.cyf112233.musicmc.util.Async
+import io.github.cyf112233.musicmc.client.UiText
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.AbstractTexture
 import net.minecraft.client.renderer.texture.DynamicTexture
@@ -153,7 +154,7 @@ object RowCoverCache {
         } catch (_: Exception) {
         }
         val bi = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
-            ?: throw java.io.IOException("ImageIO cannot recognize image format")
+            ?: throw java.io.IOException(UiText.t("ImageIO 无法识别图片格式", "ImageIO cannot recognize image format"))
         val w = bi.width
         val h = bi.height
         val img = NativeImage(NativeImage.Format.RGBA, w, h, false)

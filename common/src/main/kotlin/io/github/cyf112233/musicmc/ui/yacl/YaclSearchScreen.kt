@@ -2,6 +2,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Song
@@ -16,7 +17,7 @@ import net.minecraft.network.chat.Component
  * YACL 版搜索页:输入关键词搜索 B 站歌曲,点击结果播放并返回主界面。
  * 输入框用 MC 原生 EditBox(IME / 光标 / 粘贴支持与原版聊天一致);视觉走 YaclTheme。
  */
-class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("Search")) {
+class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiText.t("搜索", "Search"))) {
 
     private val results = ArrayList<Song>()
     private var error: String? = null
@@ -30,7 +31,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("Sea
 
     override fun init() {
         super.init()
-        val box = EditBox(font, width / 2 - 180, 20, 300, 16, Component.literal("Search Songs"))
+        val box = EditBox(font, width / 2 - 180, 20, 300, 16, Component.literal(UiText.t("搜索歌曲", "Search Songs")))
         box.setMaxLength(60)
         editBox = box
         addWidget(box)
@@ -44,7 +45,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("Sea
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
 
         // 输入框(MC 原生渲染)
         editBox?.extractWidgetRenderState(graphics, mouseX, mouseY, partialTick)
@@ -52,7 +53,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal("Sea
         // 搜索按钮
         rectSearchBtn.x1 = width / 2 + 126; rectSearchBtn.y1 = 20
         rectSearchBtn.x2 = width / 2 + 126 + 56; rectSearchBtn.y2 = 36
-        YaclTheme.drawBtn(g, rectSearchBtn, if (searching) "…" else "Search", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectSearchBtn, if (searching) "…" else UiText.t("搜索", "Search"), mouseX, mouseY, accent = true)
 
         // 状态 / 错误
         var listY = 48

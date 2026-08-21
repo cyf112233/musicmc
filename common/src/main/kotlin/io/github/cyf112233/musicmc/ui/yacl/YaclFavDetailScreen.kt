@@ -4,6 +4,7 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Song
@@ -19,7 +20,7 @@ import net.minecraft.network.chat.Component
 class YaclFavDetailScreen(
     private val folder: FavFolder,
     private val back: Screen,
-) : Screen(Component.literal("Favorites")) {
+) : Screen(Component.literal(UiText.t("收藏", "Favorites"))) {
 
     private val player get() = NetMusic.player
 
@@ -63,14 +64,14 @@ class YaclFavDetailScreen(
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
-        val title = folder.title.ifBlank { "UnnamedFavorites" }
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
+        val title = folder.title.ifBlank { UiText.t("未命名收藏夹", "Unnamed folder") }
         YaclTheme.drawCenteredTitle(g, title, w / 2, 10)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectPlayAllBtn, "Play All", mouseX, mouseY, accent = true)
+        YaclTheme.drawBtn(g, rectPlayAllBtn, UiText.t("播放全部", "Play All"), mouseX, mouseY, accent = true)
 
         if (songs.isEmpty() && loading) {
-            g.drawText("Loading…", w / 2 - 40, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("加载中…", "Loading…"), w / 2 - 40, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null && songs.isEmpty()) {
@@ -78,7 +79,7 @@ class YaclFavDetailScreen(
             return
         }
         if (songs.isEmpty()) {
-            g.drawText("This folder is empty", w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("收藏夹暂无内容", "This folder is empty"), w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
 RowCoverCache.pump()
@@ -99,7 +100,7 @@ RowCoverCache.pump()
         if (!allLoaded) {
             rectMoreBtn.x1 = w / 2 - 50; rectMoreBtn.y1 = h - 24
             rectMoreBtn.x2 = w / 2 + 50; rectMoreBtn.y2 = h - 8
-            YaclTheme.drawBtn(g, rectMoreBtn, if (loading) "Loading…" else "Load More", mouseX, mouseY)
+            YaclTheme.drawBtn(g, rectMoreBtn, if (loading) UiText.t("加载中…", "Loading…") else UiText.t("加载更多", "Load More"), mouseX, mouseY)
         } else if (songs.size > (h - 40) / rowH) {
             YaclTheme.drawScrollHint(g, w, h)
         }

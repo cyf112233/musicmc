@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.util.Lrc
 import io.github.cyf112233.musicmc.ui.Widgets
@@ -15,7 +16,7 @@ import net.minecraft.network.chat.Component
  * YACL 版Lyrics页:显示当前歌曲Lyrics,当前行高亮,自动跟随播放进度。
  * 手动滚动后暂停跟随,点「跟随」重新开启;视觉走 YaclTheme。
  */
-class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("Lyrics")) {
+class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiText.t("歌词", "Lyrics"))) {
 
     private val player get() = NetMusic.player
 
@@ -37,20 +38,20 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("Lyri
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
 
         // 歌名 + 跟随开关
         val song = player.current
-        val songTitle = song?.title?.ifBlank { "Unknown" } ?: "Not Playing"
+        val songTitle = song?.title?.ifBlank { UiText.t("未知标题", "Unknown") } ?: UiText.t("未在播放", "Not Playing")
         YaclTheme.drawCenteredTitle(g, songTitle, w / 2, 12)
 
         rectFollowBtn.x1 = w / 2 + 120; rectFollowBtn.y1 = 10
         rectFollowBtn.x2 = w / 2 + 120 + 48; rectFollowBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectFollowBtn, if (autoFollow) "Follow: On" else "Follow: Off", mouseX, mouseY)
+        YaclTheme.drawBtn(g, rectFollowBtn, if (autoFollow) UiText.t("跟随:开", "Follow: On") else UiText.t("跟随:关", "Follow: Off"), mouseX, mouseY)
 
         // Lyrics加载
         if (song == null) {
-            g.drawText("Not Playing", w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("未在播放", "Not Playing"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (song.id != lastSongId) {
@@ -71,7 +72,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("Lyri
             }
         }
         if (!loaded) {
-            g.drawText("Loading lyrics…", w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("歌词加载中…", "Loading lyrics…"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
@@ -79,7 +80,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal("Lyri
             return
         }
         if (lines.isEmpty()) {
-            g.drawText("No lyrics", w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("暂无歌词", "No lyrics"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
 

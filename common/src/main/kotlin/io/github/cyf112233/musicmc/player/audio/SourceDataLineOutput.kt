@@ -1,5 +1,6 @@
 package io.github.cyf112233.musicmc.player.audio
 
+import io.github.cyf112233.musicmc.client.UiText
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.FloatControl
@@ -14,7 +15,7 @@ class SourceDataLineOutput(rate: Int, channels: Int) : AudioOutput {
     private var line: SourceDataLine? = null
 
     init {
-        if (rate <= 0 || channels <= 0) throw java.io.IOException("Invalid FFmpeg output format")
+        if (rate <= 0 || channels <= 0) throw java.io.IOException(UiText.t("FFmpeg 解码输出格式无效", "Invalid FFmpeg output format"))
         val format = AudioFormat(rate.toFloat(), 16, channels, true, false)
         val l = AudioSystem.getSourceDataLine(format)
         l.open(format, 131072) // 128KB line 缓冲,减少 write 阻塞与碎片化

@@ -11,6 +11,7 @@ import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.net.Http
 import io.github.cyf112233.musicmc.util.Async
 import io.github.cyf112233.musicmc.util.Lrc
+import io.github.cyf112233.musicmc.client.UiText
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 
@@ -71,7 +72,7 @@ object LyricManager {
 
                 // 1) 本地缓存
                 LyricCache.load(key)?.let { cached ->
-                    cb(LyricResult(cached.lines(), cached.userOffsetSec, "Local cache"), null)
+                    cb(LyricResult(cached.lines(), cached.userOffsetSec, UiText.t("本地缓存", "Local cache")), null)
                     return@execute
                 }
 
@@ -95,15 +96,15 @@ object LyricManager {
                         if (existing == null || !existing.manual) {
                             LyricCache.save(key, lines, offset, manual = false, source = "cc")
                         }
-                        cb(LyricResult(lines, offset, "CC subtitles"), null)
+                        cb(LyricResult(lines, offset, UiText.t("CC字幕", "CC subtitles")), null)
                     } else if (NetMusic.config.lyricTitleFallback) {
                         autoMatch(song, key, cb)
                     } else {
-                        cb(LyricResult(emptyList(), 0f, ""), err ?: "No CC subtitles for this video")
+                        cb(LyricResult(emptyList(), 0f, ""), err ?: UiText.t("该视频无 CC 字幕", "No CC subtitles for this video"))
                     }
                 }
             } catch (e: Exception) {
-                cb(LyricResult(emptyList(), 0f, ""), e.message ?: "Failed to load lyrics")
+                cb(LyricResult(emptyList(), 0f, ""), e.message ?: UiText.t("歌词加载失败", "Failed to load lyrics"))
             }
         }
     }
@@ -117,7 +118,7 @@ object LyricManager {
      */
     fun manualSearch(keyword: String, cb: (List<LyricCandidate>, String?) -> Unit) {
         if (keyword.isBlank()) {
-            cb(emptyList(), "Search keyword is empty")
+            cb(emptyList(), UiText.t("搜索关键词为空", "Search keyword is empty"))
             return
         }
         val accumulated = mutableListOf<LyricCandidate>()
@@ -137,7 +138,7 @@ object LyricManager {
                     when {
                         snapshot.isNotEmpty() -> cb(snapshot, null)
                         err != null -> cb(emptyList(), err)
-                        last -> cb(emptyList(), "No related lyrics found")
+                        last -> cb(emptyList(), UiText.t("未找到相关歌词", "No related lyrics found"))
                         else -> cb(emptyList(), null) // 其他来源可能还有结果,不报错
                     }
                 }
@@ -152,7 +153,7 @@ object LyricManager {
     fun bind(song: Song, candidate: LyricCandidate, cb: (LyricResult, String?) -> Unit) {
         LyricProviders.fetch(candidate) { lines, err ->
             if (lines.isEmpty()) {
-                Async.onUi { cb(LyricResult(emptyList(), 0f, ""), err ?: "No lyrics from this source") }
+                Async.onUi { cb(LyricResult(emptyList(), 0f, ""), err ?: UiText.t("该来源暂无歌词", "No lyrics from this source")) }
                 return@fetch
             }
             val key = LyricCache.keyFor(song)
@@ -196,11 +197,11 @@ object LyricManager {
     fun hubPull(key: String, cb: (HubData?, String?) -> Unit) {
         Async.executor.execute {
             if (!hubEnabled()) {
-                cb(null, "No Hub URL configured")
+                cb(null, UiText.t("未配置 Hub 地址", "No Hub URL configured"))
                 return@execute
             }
             val data = hubPullSync(key)
-            cb(data, if (data == null) "Hub has no lyrics or fetch failed" else null)
+            cb(data, if (data == null) UiText.t("Hub 无此歌词或拉取失败", "Hub has no lyrics or fetch failed") else null)
         }
     }
 
@@ -251,7 +252,7 @@ object LyricManager {
     private fun autoMatch(song: Song, key: String, cb: (LyricResult, String?) -> Unit) {
         val keyword = TitleLyricLookup.cleanTitle(song.title)
         if (keyword.isBlank()) {
-            cb(LyricResult(emptyList(), 0f, ""), "No matching lyrics found")
+            cb(LyricResult(emptyList(), 0f, ""), UiText.t("未找到匹配歌词", "No matching lyrics found"))
             return
         }
         LyricProviders.search(LyricProviders.NETEASE, keyword) { candidates, _ ->
@@ -291,14 +292,14 @@ object LyricManager {
         LyricProviders.search(LyricProviders.KUGOU, keyword) { candidates, _ ->
             val matched = matchDuration(candidates, song.durationMs)
             if (matched == null) {
-                cb(LyricResult(emptyList(), 0f, ""), "No matching lyrics found")
+                cb(LyricResult(emptyList(), 0f, ""), UiText.t("未找到匹配歌词", "No matching lyrics found"))
                 return@search
             }
             LyricProviders.fetch(matched) { lines, _ ->
                 if (lines.isNotEmpty()) {
                     finishAuto(song, key, lines, matched.source, cb)
                 } else {
-                    cb(LyricResult(emptyList(), 0f, ""), "No matching lyrics found")
+                    cb(LyricResult(emptyList(), 0f, ""), UiText.t("未找到匹配歌词", "No matching lyrics found"))
                 }
             }
         }

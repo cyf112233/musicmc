@@ -5,6 +5,7 @@ import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.UiText
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -14,7 +15,7 @@ import net.minecraft.network.chat.Component
  * YACL 版Favorites页:展示 B 站Favorites列表(BiliActions.folders)。
  * 未Login时提示并给出「扫码Login」入口;点击Favorites进入详情页;视觉走 YaclTheme。
  */
-class YaclFavScreen(private val back: Screen) : Screen(Component.literal("Favorites")) {
+class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.t("收藏", "Favorites"))) {
 
 
     private var folders: List<FavFolder>? = null
@@ -45,14 +46,14 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal("Favori
         YaclTheme.drawBackground(g, w, h)
 
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
-        YaclTheme.drawBtn(g, rectBackBtn, "< Back", mouseX, mouseY)
-        YaclTheme.drawCenteredTitle(g, "Favorites", w / 2, 10)
+        YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
+        YaclTheme.drawCenteredTitle(g, UiText.t("收藏", "Favorites"), w / 2, 10)
 
         if (!NetMusic.bilibiliLoggedIn()) {
-            YaclTheme.drawTextClipped(g, "Not logged in to Bilibili. Log in to view favorites", w / 2 - 140, h / 2 - 30, 12f, 280, YaclTheme.colorTextSub)
+            YaclTheme.drawTextClipped(g, UiText.t("未登录 B 站,登录后可查看收藏夹", "Not logged in to Bilibili. Log in to view favorites"), w / 2 - 140, h / 2 - 30, 12f, 280, YaclTheme.colorTextSub)
             rectLoginBtn.x1 = w / 2 - 70; rectLoginBtn.y1 = h / 2 - 10
             rectLoginBtn.x2 = w / 2 + 70; rectLoginBtn.y2 = h / 2 + 14
-            YaclTheme.drawBtn(g, rectLoginBtn, "QR Login", mouseX, mouseY, accent = true)
+            YaclTheme.drawBtn(g, rectLoginBtn, UiText.t("扫码登录", "QR Login"), mouseX, mouseY, accent = true)
             return
         }
 
@@ -61,18 +62,18 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal("Favori
 
         val list = folders
         if (list == null && error == null) {
-            g.drawText("Loading favorites…", w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("加载收藏夹中…", "Loading favorites…"), w / 2 - 70, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (error != null) {
             YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
             rectRefreshBtn.x1 = w / 2 - 40; rectRefreshBtn.y1 = h / 2 + 2
             rectRefreshBtn.x2 = w / 2 + 40; rectRefreshBtn.y2 = h / 2 + 26
-            YaclTheme.drawBtn(g, rectRefreshBtn, "Retry", mouseX, mouseY)
+            YaclTheme.drawBtn(g, rectRefreshBtn, UiText.t("重试", "Retry"), mouseX, mouseY)
             return
         }
         if (list!!.isEmpty()) {
-            g.drawText("No favorites yet", w / 2 - 50, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("暂无收藏夹", "No favorites yet"), w / 2 - 50, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         val rowH = 24
@@ -82,7 +83,7 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal("Favori
         var y = 40
         while (idx < list.size && y + rowH < h - 8) {
             val f = list[idx]
-            YaclTheme.drawListRow(g, f.title.ifBlank { "UnnamedFavorites" }, "${f.mediaCount} videos", listX, y, listW, rowH, mouseX, mouseY)
+            YaclTheme.drawListRow(g, f.title.ifBlank { UiText.t("未命名收藏夹", "Unnamed folder") }, UiText.t("${f.mediaCount} 个视频", "${f.mediaCount} videos"), listX, y, listW, rowH, mouseX, mouseY)
             y += rowH
             idx++
         }

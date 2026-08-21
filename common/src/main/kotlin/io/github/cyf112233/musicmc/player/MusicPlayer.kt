@@ -6,6 +6,7 @@ import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.player.ffmpeg.FfmpegAudioEngine
 import io.github.cyf112233.musicmc.player.ffmpeg.FfmpegDecoder
 import io.github.cyf112233.musicmc.util.Async
+import io.github.cyf112233.musicmc.client.UiText
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -142,7 +143,7 @@ class MusicPlayer(
             if (!FfmpegDecoder.nativeAvailable()) {
                 state = PlayerState.ERROR
                 notifyStateChanged()
-                val msg = "Playback not supported on this platform (missing FFmpeg native libs)"
+                val msg = UiText.t("当前平台不支持播放(缺少 FFmpeg 原生库)", "Playback not supported on this platform (missing FFmpeg native libs)")
                 toast(msg)
                 io.github.cyf112233.musicmc.NetMusic.logger.warn(msg)
                 return@loadUrl
@@ -152,7 +153,7 @@ class MusicPlayer(
                 if (result == null) {
                     state = PlayerState.ERROR
                     notifyStateChanged()
-                    val msg = if (err.isNullOrBlank()) "Playback failed" else "Playback failed: $err"
+                    val msg = if (err.isNullOrBlank()) UiText.t("播放失败", "Playback failed") else UiText.t("播放失败: $err", "Playback failed: $err")
                     toast(msg)
                     io.github.cyf112233.musicmc.NetMusic.logger.warn(msg)
                 } else {
@@ -203,10 +204,10 @@ class MusicPlayer(
                             // 第二次仍失败才自动切歌
                             if (!midRetried) {
                                 midRetried = true
-                                toast("Playback interrupted, fetching a new URL…")
+                                toast(UiText.t("播放中断,正在重新获取地址…", "Playback interrupted, fetching a new URL…"))
                                 loadUrl()
                             } else {
-                                toast("Playback interrupted, skipped to next song")
+                                toast(UiText.t("播放中断,已自动切歌", "Playback interrupted, skipped to next song"))
                                 handleFinished()
                             }
                         } else if (!startupRetried) {

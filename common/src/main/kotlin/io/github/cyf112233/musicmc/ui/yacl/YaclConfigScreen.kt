@@ -10,6 +10,7 @@ import dev.isxander.yacl3.api.controller.EnumControllerBuilder
 import dev.isxander.yacl3.api.controller.IntegerSliderControllerBuilder
 import dev.isxander.yacl3.api.controller.StringControllerBuilder
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.player.PlayMode
 import io.github.cyf112233.musicmc.ui.UiBackend
 import io.github.cyf112233.musicmc.ui.UiBackendResolver
@@ -26,9 +27,9 @@ object YaclConfigScreen {
 
     /** UI 方案(含 AUTO 默认;字符串值与 ModConfig.uiMode 兼容,含旧值 LDLIB) */
     enum class UiModeOption(val label: String, val value: String) {
-        AUTO("Auto (use whichever is installed)", "AUTO"),
+        AUTO(UiText.t("自动(装了哪个用哪个)", "Auto (use whichever is installed)"), "AUTO"),
         MODERN_UI("ModernUI", "MODERN_UI"),
-        YACL("YACL (Modern)", "YACL"),
+        YACL(UiText.t("YACL 现代化", "YACL (Modern)"), "YACL"),
     }
 
     fun open(parent: Screen?): Screen {
@@ -59,15 +60,15 @@ object YaclConfigScreen {
                 .build()
 
         val categoryGeneral = ConfigCategory.createBuilder()
-            .name(Component.literal("General"))
+            .name(Component.literal(UiText.t("通用", "General")))
             .option(
                 Option.createBuilder<UiModeOption>()
-                    .name(Component.literal("UI Mode"))
+                    .name(Component.literal(UiText.t("UI 方案", "UI Mode")))
                     .description {
                         OptionDescription.of(
                             Component.literal(
-                                "Auto: pick what is installed — PC: ModernUI > YACL > vanilla;" +
-                                    "Android: YACL > vanilla (ModernUI needs Java2D, blank text on Android, never used)",
+                                UiText.t("自动:装了哪个用哪个 —— PC:ModernUI > YACL > 原版;", "Auto: pick what is installed — PC: ModernUI > YACL > vanilla;") +
+                                    UiText.t("Android:YACL > 原版(ModernUI 依赖 Java2D,Android 上文字空白,永不使用)", "Android: YACL > vanilla (ModernUI needs Java2D, blank text on Android, never used)"),
                             ),
                         )
                     }
@@ -77,16 +78,16 @@ object YaclConfigScreen {
             )
             .option(
                 ButtonOption.createBuilder()
-                    .name(Component.literal("Switch UI"))
+                    .name(Component.literal(UiText.t("切换 UI", "Switch UI")))
                     .description(
                         OptionDescription.of(
                             Component.literal(
-                                "Switch between ModernUI and YACL (requires the matching mod installed);" +
-                                    "Hidden on Android (ModernUI unavailable)",
+                                UiText.t("在 ModernUI 与 YACL 界面之间一键切换(需对应模组已安装);", "Switch between ModernUI and YACL (requires the matching mod installed);") +
+                                    UiText.t("Android 上 ModernUI 不可用,该按钮隐藏", "Hidden on Android (ModernUI unavailable)"),
                             ),
                         ),
                     )
-                    .text(Component.literal("Switch"))
+                    .text(Component.literal(UiText.t("切换", "Switch")))
                     // Android 恒 YACL,无切换意义 → 隐藏
                     .available(!io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge.isAndroid())
                     .action { _ ->
@@ -106,8 +107,8 @@ object YaclConfigScreen {
             )
             .option(
                 Option.createBuilder<Int>()
-                    .name(Component.literal("Volume"))
-                    .description { OptionDescription.of(Component.literal("Global volume 0-100%")) }
+                    .name(Component.literal(UiText.t("音量", "Volume")))
+                    .description { OptionDescription.of(Component.literal(UiText.t("全局播放音量 0-100%", "Global volume 0-100%"))) }
                     .binding(80, { (volume * 100).toInt() }, { volume = it / 100f })
                     .controller {
                         IntegerSliderControllerBuilder.create(it)
@@ -119,8 +120,8 @@ object YaclConfigScreen {
             )
             .option(
                 Option.createBuilder<Int>()
-                    .name(Component.literal("Audio Bitrate"))
-                    .description { OptionDescription.of(Component.literal("Requested audio bitrate (kbps). Higher = better quality but more data")) }
+                    .name(Component.literal(UiText.t("音质码率", "Audio Bitrate")))
+                    .description { OptionDescription.of(Component.literal(UiText.t("请求的音频码率(kbps),越高音质越好但更耗流量", "Requested audio bitrate (kbps). Higher = better quality but more data"))) }
                     .binding(320, { bitrate }, { bitrate = it })
                     .controller {
                         IntegerSliderControllerBuilder.create(it)
@@ -132,8 +133,8 @@ object YaclConfigScreen {
             )
             .option(
                 Option.createBuilder<PlayMode>()
-                    .name(Component.literal("Play Mode"))
-                    .description { OptionDescription.of(Component.literal("Loop All / Loop One / Sequential / Shuffle")) }
+                    .name(Component.literal(UiText.t("播放模式", "Play Mode")))
+                    .description { OptionDescription.of(Component.literal(UiText.t("列表循环 / 单曲循环 / 顺序 / 随机", "Loop All / Loop One / Sequential / Shuffle"))) }
                     .binding(
                         PlayMode.SEQUENCE,
                         { runCatching { PlayMode.valueOf(playMode) }.getOrDefault(PlayMode.SEQUENCE) },
@@ -144,10 +145,10 @@ object YaclConfigScreen {
                             .formatValue { m ->
                                 Component.literal(
                                     when (m) {
-                                        PlayMode.SEQUENCE -> "Sequential"
-                                        PlayMode.LOOP_ALL -> "Loop All"
-                                        PlayMode.LOOP_ONE -> "Loop One"
-                                        PlayMode.SHUFFLE -> "Shuffle"
+                                        PlayMode.SEQUENCE -> UiText.t("顺序播放", "Sequential")
+                                        PlayMode.LOOP_ALL -> UiText.t("列表循环", "Loop All")
+                                        PlayMode.LOOP_ONE -> UiText.t("单曲循环", "Loop One")
+                                        PlayMode.SHUFFLE -> UiText.t("随机播放", "Shuffle")
                                     },
                                 )
                             }
@@ -157,35 +158,35 @@ object YaclConfigScreen {
             .build()
 
         val categoryLyrics = ConfigCategory.createBuilder()
-            .name(Component.literal("Lyrics"))
-            .option(boolOption("Show Lyrics", "Show lyrics while playing", { lyricsEnabled }, { lyricsEnabled = it }))
-            .option(boolOption("HUD Lyrics", "Show lyrics on the in-game HUD", { hudLyricEnabled }, { hudLyricEnabled = it }))
-            .option(boolOption("Chat Lyrics", "Also send each lyric line to chat", { chatLyricEnabled }, { chatLyricEnabled = it }))
+            .name(Component.literal(UiText.t("歌词", "Lyrics")))
+            .option(boolOption(UiText.t("显示歌词", "Show Lyrics"), UiText.t("播放时显示当前歌曲歌词", "Show lyrics while playing"), { lyricsEnabled }, { lyricsEnabled = it }))
+            .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), { hudLyricEnabled }, { hudLyricEnabled = it }))
+            .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), { chatLyricEnabled }, { chatLyricEnabled = it }))
             .build()
 
         val categoryHud = ConfigCategory.createBuilder()
-            .name(Component.literal("HUD"))
-            .option(boolOption("HUD Panel", "Show the in-game music HUD (cover / title / progress)", { hudEnabled }, { hudEnabled = it }))
+            .name(Component.literal(UiText.t("HUD", "HUD")))
+            .option(boolOption(UiText.t("悬浮播放面板", "HUD Panel"), UiText.t("游戏内显示音乐 HUD(封面/歌名/进度)", "Show the in-game music HUD (cover / title / progress)"), { hudEnabled }, { hudEnabled = it }))
             .option(
                 ButtonOption.createBuilder()
-                    .name(Component.literal("Open HUD Editor"))
-                    .description(OptionDescription.of(Component.literal("Drag to move the HUD, scroll to scale; changes apply live")))
-                    .text(Component.literal("Edit"))
+                    .name(Component.literal(UiText.t("打开 HUD 编辑器", "Open HUD Editor")))
+                    .description(OptionDescription.of(Component.literal(UiText.t("拖动调整悬浮面板位置,滚轮缩放;拖动时实时生效", "Drag to move the HUD, scroll to scale; changes apply live"))))
+                    .text(Component.literal(UiText.t("编辑", "Edit")))
                     .action { io.github.cyf112233.musicmc.platform.McScreens.open(YaclHudEditorScreen()) }
                     .build(),
             )
             .build()
 
         val categoryAdvanced = ConfigCategory.createBuilder()
-            .name(Component.literal("Advanced"))
+            .name(Component.literal(UiText.t("高级", "Advanced")))
             .option(
                 Option.createBuilder<String>()
-                    .name(Component.literal("FFmpeg Platform Override"))
+                    .name(Component.literal(UiText.t("FFmpeg 平台覆盖", "FFmpeg Platform Override")))
                     .description {
                         OptionDescription.of(
                             Component.literal(
-                                "Force the javacpp platform name (e.g. android-arm64 / linux-x86_64);" +
-                                    "Leave empty for auto-detection. Usually no change needed.",
+                                UiText.t("强制 javacpp 平台名(如 android-arm64 / linux-x86_64);", "Force the javacpp platform name (e.g. android-arm64 / linux-x86_64);") +
+                                    UiText.t("留空则按系统自动判定。一般无需修改", "Leave empty for auto-detection. Usually no change needed."),
                             ),
                         )
                     }
@@ -195,14 +196,14 @@ object YaclConfigScreen {
             )
             .option(
                 Option.createBuilder<String>()
-                    .name(Component.literal("Native Lib Cache Dir"))
+                    .name(Component.literal(UiText.t("原生库缓存目录", "Native Lib Cache Dir")))
                     .description {
                         OptionDescription.of(
                             Component.literal(
-                                "Android extract dir for javacpp/AAudio native libs (must be executable)." +
-                                    "Leave empty for auto (first writable & executable of tmpdir → user.home → user.dir);" +
-                                    "For non-FCL launchers or failed detection, set an app-private executable dir manually" +
-                                    "(e.g. /data/user/0/<package>/cache/musicmc-native)",
+                                UiText.t("Android 上 javacpp/AAudio 原生库解包目录(需可执行)。", "Android extract dir for javacpp/AAudio native libs (must be executable).") +
+                                    UiText.t("留空自动判定(按 tmpdir → user.home → user.dir 取首个可写且可执行目录);", "Leave empty for auto (first writable & executable of tmpdir → user.home → user.dir);") +
+                                    UiText.t("非 FCL 启动器或自动判定失败时,可手动填 app 私有可执行目录", "For non-FCL launchers or failed detection, set an app-private executable dir manually") +
+                                    UiText.t("(如 /data/user/0/<包名>/cache/musicmc-native)", "(e.g. /data/user/0/<package>/cache/musicmc-native)"),
                             ),
                         )
                     }
@@ -213,7 +214,7 @@ object YaclConfigScreen {
             .build()
 
         val screen = YetAnotherConfigLib.createBuilder()
-            .title(Component.literal("MusicMC Settings"))
+            .title(Component.literal(UiText.t("MusicMC 设置", "MusicMC Settings")))
             .category(categoryGeneral)
             .category(categoryLyrics)
             .category(categoryHud)

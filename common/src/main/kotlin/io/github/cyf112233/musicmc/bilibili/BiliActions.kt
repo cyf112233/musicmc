@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.bilibili
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.util.Async
+import io.github.cyf112233.musicmc.client.UiText
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
@@ -41,7 +42,7 @@ object BiliActions {
         aidCache[bvid]?.let { return it }
         val view = BiliHttp.view(bvid)
         val a = view.optObject("data")?.get("aid")?.optLong() ?: 0L
-        if (a <= 0L) throw IOException("Failed to fetch video info")
+        if (a <= 0L) throw IOException(UiText.t("获取视频信息失败", "Failed to fetch video info"))
         aidCache[bvid] = a
         return a
     }
@@ -60,7 +61,7 @@ object BiliActions {
             val (aid, err) = try {
                 blockingAid(bvid).let { it to null }
             } catch (e: Exception) {
-                0L to (e.message ?: "Failed to fetch video info")
+                0L to (e.message ?: UiText.t("获取视频信息失败", "Failed to fetch video info"))
             }
             Async.onUi { cb(aid, err) }
         }
@@ -73,7 +74,7 @@ object BiliActions {
      */
     fun toggleLike(song: Song, cb: (Boolean, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
-            cb(false, "Please log in to Bilibili in Settings first")
+            cb(false, UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first"))
             return
         }
         val bvid = song.id
@@ -98,7 +99,7 @@ object BiliActions {
                 state.liked = target
                 liked = target
             } catch (e: Exception) {
-                err = e.message ?: "Failed to like"
+                err = e.message ?: UiText.t("点赞操作失败", "Failed to like")
             }
             Async.onUi { cb(liked, err) }
         }
@@ -130,7 +131,7 @@ object BiliActions {
                 liked = current
                 state.liked = current
             } catch (e: Exception) {
-                err = e.message ?: "Failed to check like status"
+                err = e.message ?: UiText.t("查询点赞状态失败", "Failed to check like status")
             }
             Async.onUi { cb(liked, err) }
         }
@@ -145,19 +146,19 @@ object BiliActions {
      */
     fun folders(cb: (List<FavFolder>, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Async.onUi { cb(emptyList(), "Please log in to Bilibili in Settings first") }
+            Async.onUi { cb(emptyList(), UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")) }
             return
         }
         Async.run {
             var list = emptyList<FavFolder>()
             var err: String? = null
             try {
-                val mid = BiliHttp.currentMid() ?: throw IOException("Failed to fetch account info")
+                val mid = BiliHttp.currentMid() ?: throw IOException(UiText.t("获取账号信息失败", "Failed to fetch account info"))
                 var listErr: String? = null
                 BiliHttp.favFolderList(mid, null) { l, e -> list = l; listErr = e }
                 if (listErr != null) throw IOException(listErr)
             } catch (e: Exception) {
-                err = e.message ?: "Failed to fetch favorites"
+                err = e.message ?: UiText.t("获取收藏夹失败", "Failed to fetch favorites")
             }
             Async.onUi { cb(list, err) }
         }
@@ -178,7 +179,7 @@ object BiliActions {
             var err: String? = null
             try {
                 val aid = blockingAid(bvid)
-                val mid = BiliHttp.currentMid() ?: throw IOException("Failed to fetch account info")
+                val mid = BiliHttp.currentMid() ?: throw IOException(UiText.t("获取账号信息失败", "Failed to fetch account info"))
                 var list = emptyList<FavFolder>()
                 var listErr: String? = null
                 BiliHttp.favFolderList(mid, aid) { l, e -> list = l; listErr = e }
@@ -187,7 +188,7 @@ object BiliActions {
                 for (f in list) if (f.favState) set.add(f.id)
                 folderFavs[bvid] = set
             } catch (e: Exception) {
-                err = e.message ?: "Failed to check favorite status"
+                err = e.message ?: UiText.t("查询收藏状态失败", "Failed to check favorite status")
             }
             Async.onUi { cb(err) }
         }
@@ -200,7 +201,7 @@ object BiliActions {
      */
     fun toggleFavInFolder(song: Song, folder: FavFolder, cb: (Boolean, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Async.onUi { cb(false, "Please log in to Bilibili in Settings first") }
+            Async.onUi { cb(false, UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")) }
             return
         }
         val bvid = song.id
@@ -215,7 +216,7 @@ object BiliActions {
                 if (inFolder) BiliHttp.favDel(aid, folder.id) { e -> opErr = e }
                 else BiliHttp.favAdd(aid, folder.id) { e -> opErr = e }
                 if (opErr != null) {
-                    if (opErr == "Already in this folder") {
+                    if (opErr == UiText.t("已在该收藏夹", "Already in this folder")) {
                         // 缓存过期:实际已在夹,按加入成功处理
                         set.add(folder.id)
                         faved = true
@@ -227,7 +228,7 @@ object BiliActions {
                     faved = !inFolder
                 }
             } catch (e: Exception) {
-                err = e.message ?: "Failed to add favorite"
+                err = e.message ?: UiText.t("收藏操作失败", "Failed to add favorite")
             }
             Async.onUi { cb(faved, err) }
         }
@@ -239,7 +240,7 @@ object BiliActions {
      */
     fun createFolder(title: String, cb: (Long?, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Async.onUi { cb(null, "Please log in to Bilibili in Settings first") }
+            Async.onUi { cb(null, UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")) }
             return
         }
         Async.run {
@@ -250,7 +251,7 @@ object BiliActions {
                 BiliHttp.favCreateFolder(title) { f, e -> fid = f; opErr = e }
                 if (opErr != null) throw IOException(opErr)
             } catch (e: Exception) {
-                err = e.message ?: "Failed to create folder"
+                err = e.message ?: UiText.t("新建收藏夹失败", "Failed to create folder")
                 fid = null
             }
             Async.onUi { cb(fid, err) }
@@ -263,7 +264,7 @@ object BiliActions {
      */
     fun folderSongs(fid: Long, pn: Int, cb: (List<Song>, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Async.onUi { cb(emptyList(), "Please log in to Bilibili in Settings first") }
+            Async.onUi { cb(emptyList(), UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")) }
             return
         }
         Async.run {
@@ -274,7 +275,7 @@ object BiliActions {
                 BiliHttp.favResourceList(fid, pn) { l, e -> list = l; listErr = e }
                 if (listErr != null) throw IOException(listErr)
             } catch (e: Exception) {
-                err = e.message ?: "Failed to fetch folder contents"
+                err = e.message ?: UiText.t("获取收藏夹内容失败", "Failed to fetch folder contents")
             }
             Async.onUi { cb(list, err) }
         }

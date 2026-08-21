@@ -20,6 +20,7 @@ import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.bilibili.FavFolder
+import io.github.cyf112233.musicmc.client.UiText
 
 /**
  * 收藏夹选择器(点击主页 ★ 打开;可浏览 / 选择 / 新建 / 取消收藏):
@@ -49,7 +50,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = "Select Folder"
+                text = UiText.t("选择收藏夹", "Select Folder")
                 setTextAppearance(R.attr.textAppearanceTitleLarge)
                 setPadding(dp(16f), dp(12f), dp(16f), dp(4f))
             },
@@ -58,7 +59,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             TextView(context).apply {
-                text = NetMusic.player.current?.let { "Current song: ${it.title}" } ?: "Play a song first"
+                text = NetMusic.player.current?.let { UiText.t("当前歌曲: ${it.title}", "Current song: ${it.title}") } ?: UiText.t("请先播放歌曲", "Play a song first")
                 setTextSize(13f)
                 setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
@@ -69,7 +70,7 @@ class FavPickerFragment : Fragment() {
         )
 
         statusText = TextView(context).apply {
-            text = "Loading…"
+            text = UiText.t("加载中…", "Loading…")
             setTextSize(14f)
             setPadding(dp(16f), dp(8f), dp(16f), dp(8f))
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
@@ -89,7 +90,7 @@ class FavPickerFragment : Fragment() {
             visibility = View.GONE
         }.also { panel ->
             createInput = EditText(context).apply {
-                hint = "Folder name"
+                hint = UiText.t("收藏夹名称", "Folder name")
                 setTextSize(14f)
                 // Enter = 确定(无 IME 管线,直接按键触发)
                 Widgets.bindEnter(this) { submitCreate() }
@@ -97,13 +98,13 @@ class FavPickerFragment : Fragment() {
             panel.addView(createInput, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             panel.addView(
                 Button(context, null, R.attr.buttonElevatedStyle).apply {
-                    text = "OK"
+                    text = UiText.t("确定", "OK")
                     setOnClickListener { submitCreate() }
                 },
             )
             panel.addView(
                 Button(context, null, R.attr.borderlessButtonStyle).apply {
-                    text = "Cancel"
+                    text = UiText.t("取消", "Cancel")
                     setOnClickListener { hideCreatePanel() }
                 },
             )
@@ -112,7 +113,7 @@ class FavPickerFragment : Fragment() {
 
         root.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "New Folder"
+                text = UiText.t("新建收藏夹", "New Folder")
                 setOnClickListener { showCreatePanel() }
             },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
@@ -132,12 +133,12 @@ class FavPickerFragment : Fragment() {
      */
     private fun load() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            statusText?.text = "Please log in to Bilibili in Settings first"
+            statusText?.text = UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")
             statusText?.visibility = View.VISIBLE
             listView?.visibility = View.GONE
             return
         }
-        statusText?.text = "Loading…"
+        statusText?.text = UiText.t("加载中…", "Loading…")
         statusText?.visibility = View.VISIBLE
         listView?.visibility = View.VISIBLE
         // 刷新缓存(填充 folderFavs,供每行 ✓ 标记);完成后重新绑定列表
@@ -150,7 +151,7 @@ class FavPickerFragment : Fragment() {
         BiliActions.folders { list, err ->
             if (!isAdded) return@folders
             if (err != null) {
-                statusText?.text = "Failed to load: $err"
+                statusText?.text = UiText.t("加载失败: $err", "Failed to load: $err")
                 statusText?.visibility = View.VISIBLE
                 return@folders
             }
@@ -164,7 +165,7 @@ class FavPickerFragment : Fragment() {
         if (!isAdded) return
         val context = requireContext()
         if (folders.isEmpty()) {
-            statusText?.text = "No favorites yet, click the button below to create one"
+            statusText?.text = UiText.t("暂无收藏夹,点击下方按钮新建", "No favorites yet, click the button below to create one")
             statusText?.visibility = View.VISIBLE
         } else {
             statusText?.visibility = View.GONE
@@ -179,7 +180,7 @@ class FavPickerFragment : Fragment() {
     private fun onFolderClick(position: Int) {
         val song = NetMusic.player.current
         if (song == null) {
-            Widgets.toast(requireContext(), "Play a song first")
+            Widgets.toast(requireContext(), UiText.t("请先播放歌曲", "Play a song first"))
             return
         }
         val folder = folders.getOrNull(position) ?: return
@@ -193,7 +194,7 @@ class FavPickerFragment : Fragment() {
             bindFolders()
             Widgets.toast(
                 requireContext(),
-                if (faved) "Added to favorites: ${folder.title}" else "Removed from ${folder.title}",
+                if (faved) UiText.t("已收藏到 ${folder.title}", "Added to favorites: ${folder.title}") else UiText.t("已从 ${folder.title} 移除", "Removed from ${folder.title}"),
             )
         }
     }
@@ -202,7 +203,7 @@ class FavPickerFragment : Fragment() {
 
     private fun showCreatePanel() {
         if (!NetMusic.bilibiliLoggedIn()) {
-            Widgets.toast(requireContext(), "Please log in to Bilibili in Settings first")
+            Widgets.toast(requireContext(), UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first"))
             return
         }
         createPanel?.visibility = View.VISIBLE
@@ -216,7 +217,7 @@ class FavPickerFragment : Fragment() {
     private fun submitCreate() {
         val title = createInput?.text?.toString()?.trim().orEmpty()
         if (title.isEmpty()) {
-            Widgets.toast(requireContext(), "Please enter a folder name")
+            Widgets.toast(requireContext(), UiText.t("请输入收藏夹名称", "Please enter a folder name"))
             return
         }
         BiliActions.createFolder(title) { _, err ->
@@ -225,7 +226,7 @@ class FavPickerFragment : Fragment() {
                 Widgets.toast(requireContext(), err)
                 return@createFolder
             }
-            Widgets.toast(requireContext(), "Folder created")
+            Widgets.toast(requireContext(), UiText.t("收藏夹已创建", "Folder created"))
             hideCreatePanel()
             load()
         }
@@ -275,7 +276,7 @@ class FavFolderAdapter(
             ellipsize = TextUtils.TruncateAt.END
         })
         column.addView(TextView(context).apply {
-            text = "${item.mediaCount} items"
+            text = UiText.t("${item.mediaCount} 个内容", "${item.mediaCount} items")
             setTextSize(12f)
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END

@@ -18,6 +18,7 @@ import icyllis.modernui.widget.LinearLayout
 import icyllis.modernui.widget.NestedScrollView
 import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Playlist
 import io.github.cyf112233.musicmc.util.Async
 
@@ -66,7 +67,7 @@ class HomeFragment : Fragment() {
     // ---------------- 内容构建 ----------------
 
     private fun buildContent(context: Context, content: LinearLayout) {
-        content.addView(buildHomePlaylistsSection(context, "Rankings"), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        content.addView(buildHomePlaylistsSection(context, UiText.t("排行榜", "Rankings")), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
     // ---------------- 排行榜区 ----------------
@@ -100,7 +101,7 @@ class HomeFragment : Fragment() {
             Async.onUi {
                 if (err != null) {
                     box.removeAllViews()
-                    Widgets.toast(context, "Failed to load rankings: $err")
+                    Widgets.toast(context, UiText.t("排行榜加载失败: $err", "Failed to load rankings: $err"))
                 } else {
                     box.removeAllViews()
                     val grid = GridLayout(context).apply {
@@ -158,7 +159,7 @@ class HomeFragment : Fragment() {
     /** "加载中…"占位 TextView */
     private fun buildLoadingPlaceholder(context: Context): TextView =
         TextView(context).apply {
-            text = "Loading…"
+            text = UiText.t("加载中…", "Loading…")
             setTextSize(13f)
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
             setPadding(dp(16f), dp(8f), dp(16f), dp(8f))

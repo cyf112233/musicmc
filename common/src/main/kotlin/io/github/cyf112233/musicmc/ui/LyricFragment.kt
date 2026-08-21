@@ -21,6 +21,7 @@ import icyllis.modernui.widget.LinearLayout
 import icyllis.modernui.widget.ListView
 import icyllis.modernui.widget.TextView
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.lyrics.LyricCandidate
 import io.github.cyf112233.musicmc.lyrics.LyricManager
 import io.github.cyf112233.musicmc.lyrics.LyricProviders
@@ -109,7 +110,7 @@ class LyricFragment : Fragment() {
         }
         toolbar.addView(
             Button(context, null, R.attr.borderlessButtonStyle).apply {
-                text = "Search Lyrics"
+                text = UiText.t("搜索歌词", "Search Lyrics")
                 setOnClickListener { toggleSearchMode() }
                 setMinimumWidth(dp(52f))
             },
@@ -129,7 +130,7 @@ class LyricFragment : Fragment() {
             },
         )
         offsetLabel = TextView(context).apply {
-            text = "Offset 0.0s"
+            text = UiText.t("偏移 0.0s", "Offset 0.0s")
             setTextSize(13f)
             gravity = Gravity.CENTER
             setTextColor(Widgets.resolveColor(context, R.attr.colorOnSurfaceVariant) ?: 0xFFAAAAAA.toInt())
@@ -137,7 +138,7 @@ class LyricFragment : Fragment() {
         toolbar.addView(offsetLabel, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         toolbar.addView(
             Button(context, null, R.attr.borderlessButtonStyle).apply {
-                text = "Back"
+                text = UiText.t("返回", "Back")
                 setOnClickListener { back() }
                 setMinimumWidth(dp(44f))
             },
@@ -170,7 +171,7 @@ class LyricFragment : Fragment() {
         lyricArea.addView(lyricList, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         // 空态文案层(有歌词时隐藏):复用现有文案"歌词功能已关闭"/"暂无歌词"/错误信息
         lyricEmptyText = TextView(context).apply {
-            text = if (lyricsEnabled) "No lyrics yet" else "Lyrics disabled"
+            text = if (lyricsEnabled) UiText.t("暂无歌词", "No lyrics yet") else UiText.t("歌词功能已禁用", "Lyrics disabled")
             setTextSize(22f)
             gravity = Gravity.CENTER
             setTextColor(Widgets.resolveColor(context, R.attr.colorPrimary) ?: 0xFFBB86FC.toInt())
@@ -191,7 +192,7 @@ class LyricFragment : Fragment() {
             setPadding(dp(8f), dp(4f), dp(8f), dp(4f))
         }
         searchInput = EditText(context).apply {
-            hint = "Enter song title / artist"
+            hint = UiText.t("输入歌曲标题 / 歌手", "Enter song title / artist")
             setTextSize(14f)
             // Enter = 搜索(无 IME 管线,直接按键触发)
             Widgets.bindEnter(this) { doSearch() }
@@ -199,7 +200,7 @@ class LyricFragment : Fragment() {
         searchBar.addView(searchInput, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         searchBar.addView(
             Button(context, null, R.attr.buttonElevatedStyle).apply {
-                text = "Search"
+                text = UiText.t("搜索", "Search")
                 setOnClickListener { doSearch() }
                 setMinimumWidth(dp(52f))
             },
@@ -234,10 +235,10 @@ class LyricFragment : Fragment() {
         lastUserTouchMs = 0L
         lyricList?.adapter = null
         lyricAdapter = null
-        lyricEmptyText?.text = "No lyrics yet"
+        lyricEmptyText?.text = UiText.t("暂无歌词", "No lyrics yet")
         lyricEmptyText?.visibility = View.VISIBLE
         sourceText?.text = ""
-        offsetLabel?.text = "Offset 0.0s"
+        offsetLabel?.text = UiText.t("偏移 0.0s", "Offset 0.0s")
         loadLyric()
     }
 
@@ -248,7 +249,7 @@ class LyricFragment : Fragment() {
                 Async.onUi {
                     if (!isAdded) return@onUi
                     offsetSec = result.offsetSec
-                    offsetLabel?.text = "Offset ${"%.1f".format(offsetSec)}s"
+                    offsetLabel?.text = UiText.t("偏移 ${"%.1f".format(offsetSec)}s", "Offset ${"%.1f".format(offsetSec)}s")
                     showLyrics(result.lines, result.from, err)
                 }
             }
@@ -261,9 +262,9 @@ class LyricFragment : Fragment() {
      */
     private fun showLyrics(newLines: List<LyricLine>, from: String, err: String?) {
         lines = newLines
-        sourceText?.text = if (newLines.isNotEmpty()) "Source: $from" else ""
+        sourceText?.text = if (newLines.isNotEmpty()) UiText.t("来源: $from", "Source: $from") else ""
         lyricEmptyText?.apply {
-            text = if (newLines.isEmpty()) (err ?: "No lyrics yet") else ""
+            text = if (newLines.isEmpty()) (err ?: UiText.t("暂无歌词", "No lyrics yet")) else ""
             visibility = if (newLines.isEmpty()) View.VISIBLE else View.GONE
         }
         if (newLines.isEmpty()) {
@@ -298,7 +299,7 @@ class LyricFragment : Fragment() {
     private fun refreshDisplay() {
         if (lines.isEmpty()) {
             lyricEmptyText?.apply {
-                text = "No lyrics yet"
+                text = UiText.t("暂无歌词", "No lyrics yet")
                 visibility = View.VISIBLE
             }
         } else {
@@ -313,7 +314,7 @@ class LyricFragment : Fragment() {
         val song = NetMusic.player.current ?: return
         LyricManager.adjustOffset(song, delta) { newOffset ->
             offsetSec = newOffset
-            offsetLabel?.text = "Offset ${"%.1f".format(newOffset)}s"
+            offsetLabel?.text = UiText.t("偏移 ${"%.1f".format(newOffset)}s", "Offset ${"%.1f".format(newOffset)}s")
             followCurrentLine()
             // 偏移已即点即存落盘:通知 HUD 歌词缓存重载(回调在 UI 线程,直接标脏)
             HudLyricsCache.invalidate()
@@ -347,7 +348,7 @@ class LyricFragment : Fragment() {
     private fun doSearch() {
         val keyword = searchInput?.text?.toString()?.trim().orEmpty()
         if (keyword.isEmpty()) {
-            Widgets.toast(requireContext(), "Please enter a search keyword")
+            Widgets.toast(requireContext(), UiText.t("请输入搜索关键词", "Please enter a search keyword"))
             return
         }
         searchList?.adapter = LyricCandidateAdapter(requireContext(), emptyList())
@@ -363,22 +364,22 @@ class LyricFragment : Fragment() {
     /** 手动绑定候选歌词(bind 成功后回歌词视图并刷新) */
     private fun bindLyric(candidate: LyricCandidate) {
         val song = NetMusic.player.current ?: return
-        lyricEmptyText?.text = "Updating lyrics…"
+        lyricEmptyText?.text = UiText.t("正在更新歌词…", "Updating lyrics…")
         lyricEmptyText?.visibility = View.VISIBLE
         LyricManager.bind(song, candidate) { result, err ->
             if (!isAdded) return@bind
             if (result.lines.isEmpty()) {
-                Widgets.toast(requireContext(), err ?: "No lyrics from this source")
+                Widgets.toast(requireContext(), err ?: UiText.t("该来源暂无歌词", "No lyrics from this source"))
                 refreshDisplay()
                 return@bind
             }
             offsetSec = result.offsetSec
-            offsetLabel?.text = "Offset ${"%.1f".format(offsetSec)}s"
+            offsetLabel?.text = UiText.t("偏移 ${"%.1f".format(offsetSec)}s", "Offset ${"%.1f".format(offsetSec)}s")
             showLyrics(result.lines, result.from, null)
             toggleSearchMode() // 回歌词视图
             // 手动绑定新歌词成功:歌词已变更,通知 HUD 歌词缓存重载(回调在 UI 线程)
             HudLyricsCache.invalidate()
-            Widgets.toast(requireContext(), "Lyrics updated")
+            Widgets.toast(requireContext(), UiText.t("歌词已更新", "Lyrics updated"))
         }
     }
 

@@ -62,12 +62,12 @@ object Widgets {
         return "%02d:%02d".format(total / 60, total % 60)
     }
 
-    /** 播放模式中文文案 */
+    /** 播放模式文案(按游戏语言;不带"模式:"前缀,按钮上直接显示) */
     fun playModeLabel(mode: PlayMode): String = when (mode) {
-        PlayMode.SEQUENCE -> "Sequence"
-        PlayMode.LOOP_ALL -> "Loop All"
-        PlayMode.LOOP_ONE -> "Loop One"
-        PlayMode.SHUFFLE -> "Shuffle"
+        PlayMode.SEQUENCE -> io.github.cyf112233.musicmc.client.UiText.t("顺序", "Sequential")
+        PlayMode.LOOP_ALL -> io.github.cyf112233.musicmc.client.UiText.t("列表循环", "Loop All")
+        PlayMode.LOOP_ONE -> io.github.cyf112233.musicmc.client.UiText.t("单曲循环", "Loop One")
+        PlayMode.SHUFFLE -> io.github.cyf112233.musicmc.client.UiText.t("随机", "Shuffle")
     }
 
     /** 弹 Toast(包 try/catch:Fragment 已销毁等时机弹窗可能失败,静默即可) */

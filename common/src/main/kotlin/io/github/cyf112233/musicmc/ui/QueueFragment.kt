@@ -14,6 +14,7 @@ import icyllis.modernui.widget.Button
 import icyllis.modernui.widget.LinearLayout
 import icyllis.modernui.widget.ListView
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.player.PlayerListener
 import io.github.cyf112233.musicmc.player.PlayerState
@@ -60,7 +61,7 @@ class QueueFragment : Fragment() {
         topBar.addView(modeButton, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
         val clearButton = Button(context, null, R.attr.borderlessButtonStyle).apply {
-            text = "Clear Queue"
+            text = UiText.t("清空队列", "Clear Queue")
             setOnClickListener { NetMusic.player.clearQueue() }
         }
         topBar.addView(clearButton)
@@ -98,7 +99,7 @@ class QueueFragment : Fragment() {
     }
 
     private fun updateModeText() {
-        modeButton?.text = "Play Mode: ${Widgets.playModeLabel(NetMusic.player.mode)}"
+        modeButton?.text = Widgets.playModeLabel(NetMusic.player.mode)
     }
 
     companion object {
