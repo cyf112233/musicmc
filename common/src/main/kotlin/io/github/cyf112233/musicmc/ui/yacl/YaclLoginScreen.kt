@@ -53,13 +53,19 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal(UiTex
 
     override fun init() {
         super.init()
-        startLogin()
+        // 守卫:MC 在窗口 resize 时会重新调用 Screen.init(),若每次都 startLogin()
+        // 会重新生成二维码并另起一个轮询循环(旧循环靠 generation 退出)。
+        // generation==0 表示本屏幕实例尚未启动过登录流程,才真正启动。
+        if (generation == 0) startLogin()
     }
 
     override fun onClose() {
         generation++ // 作废旧轮询
         qrTexture?.let { runCatching { it.close() } }
         qrTexture = null
+        // 同时释放已注册的纹理(close 只关 Java 对象,TextureManager 里仍挂着 id,
+        // 下次进入同 id 会 register 覆盖,但释放更干净,防纹理句柄泄漏)
+        runCatching { textureManager.release(qrId) }
         super.onClose()
     }
 
@@ -80,7 +86,7 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal(UiTex
                 pollLoop(gen, qr.qrcodeKey)
             } catch (e: Exception) {
                 if (gen != generation) return@run
-                status = "QR generation failed: ${e.message ?: "network error"}"
+                status = UiText.t("二维码生成失败: ${e.message ?: "网络错误"}", "QR generation failed: ${e.message ?: "network error"}")
             }
         }
     }
@@ -93,22 +99,30 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal(UiTex
                 when (result?.status) {
                     QrStatus.SUCCESS -> {
                         val cookie = result.cookieHeader
-                        if (cookie.isNullOrBlank()) {
-                            status = "Login failed: no cookie received"
-                        } else {
-                            NetMusic.setBilibiliCookie(cookie)
-                            status = "Logged in"
-                            runCatching { McScreens.open(back) }
+                        // 登录成功:setBilibiliCookie(写配置)与 McScreens.open(切屏幕)
+                        // 都必须回 UI 线程执行 —— McScreens.open 最终是
+                        // Minecraft.setScreen / Gui.setScreen 反射调用,后台线程调用是
+                        // 渲染线程违规(onClose 的 generation++ 已防过期回调,此处切线程
+                        // 不会引入重复打开)
+                        Async.onUi {
+                            if (gen != generation) return@onUi
+                            if (cookie.isNullOrBlank()) {
+                                status = UiText.t("登录失败:未获取到登录 Cookie", "Login failed: no login cookie received")
+                            } else {
+                                NetMusic.setBilibiliCookie(cookie)
+                                status = UiText.t("登录成功", "Logged in")
+                                runCatching { McScreens.open(back) }
+                            }
                         }
                         return@run
                     }
                     QrStatus.EXPIRED -> {
-                        status = "QR code expired, click to refresh"
+                        status = UiText.t("二维码已过期,请点击刷新", "QR code expired, click to refresh")
                         return@run
                     }
-                    QrStatus.SCANNED -> status = "Scanned, confirm on your phone"
-                    QrStatus.WAIT -> status = "Waiting for scan…"
-                    null -> status = "Polling failed, retrying…"
+                    QrStatus.SCANNED -> status = UiText.t("已扫码,请在手机上确认", "Scanned, confirm on your phone")
+                    QrStatus.WAIT -> status = UiText.t("等待扫码…", "Waiting for scan…")
+                    null -> status = UiText.t("轮询失败,自动重试…", "Polling failed, retrying…")
                 }
                 try {
                     Thread.sleep(2000)

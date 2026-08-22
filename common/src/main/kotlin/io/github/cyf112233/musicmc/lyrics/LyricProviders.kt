@@ -14,6 +14,7 @@ import io.github.cyf112233.musicmc.util.Lrc
 import io.github.cyf112233.musicmc.client.UiText
 import java.io.IOException
 import java.net.URLEncoder
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -228,17 +229,23 @@ object LyricProviders {
         val dlUrl = "http://lyrics.kugou.com/download?charset=utf8&accesskey=$accessKey&id=$id&client=mobi&fmt=lrc&ver=1"
         val dl = Http.getJson(dlUrl, extraHeaders = KUGOU_HEADERS)
         val content = dl.optString("content") ?: throw IOException(UiText.t("酷狗歌词内容为空", "Kugou lyric content is empty"))
-        val lrc = String(Base64.getDecoder().decode(content), StandardCharsets.UTF_8)
+        val bytes = Base64.getDecoder().decode(content)
+        // 接口声明 charset=utf8,但酷狗历史上并不总是守约(可能返回 GBK):
+        // 解码出 \uFFFD 替换字符(UTF-8 解码失败的标志)时回退 GBK 重解
+        val lrc = String(bytes, StandardCharsets.UTF_8)
+            .let { if (it.contains('\uFFFD')) String(bytes, Charset.forName("GBK")) else it }
         return Lrc.parseLrc(lrc)
     }
 
     // ---------------- 工具 ----------------
 
-    /** QQ 歌词文本里的 HTML 实体反转义(&amp; &#39; &quot; &lt; &gt;) */
+    /** QQ 歌词文本里的 HTML 实体反转义(&amp; &#39; &quot; &lt; &gt; &nbsp; &apos; 等) */
     private fun htmlUnescape(s: String): String = s
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
 }

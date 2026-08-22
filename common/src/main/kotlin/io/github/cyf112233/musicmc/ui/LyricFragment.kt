@@ -59,6 +59,9 @@ class LyricFragment : Fragment() {
     private var searchList: ListView? = null
     private var lyricAdapter: LyricLineAdapter? = null
 
+    /** 所在导航容器 id(由 MusicMainFragment 传入;无 backstack 时返回按钮回退首页用) */
+    private val containerId: Int get() = requireArguments().getInt(KEY_CONTAINER, 0)
+
     /** 当前歌曲的歌词(按时间排序) */
     private var lines: List<LyricLine> = emptyList()
 
@@ -244,14 +247,14 @@ class LyricFragment : Fragment() {
 
     private fun loadLyric() {
         val song = NetMusic.player.current ?: return
-        Async.run {
-            LyricManager.load(song) { result, err ->
-                Async.onUi {
-                    if (!isAdded) return@onUi
-                    offsetSec = result.offsetSec
-                    offsetLabel?.text = UiText.t("偏移 ${"%.1f".format(offsetSec)}s", "Offset ${"%.1f".format(offsetSec)}s")
-                    showLyrics(result.lines, result.from, err)
-                }
+        // LyricManager.load 内部已自行 executor.execute 起后台线程,这里不要再包一层
+        // Async.run —— 否则白白占一个阻塞线程等另一个任务
+        LyricManager.load(song) { result, err ->
+            Async.onUi {
+                if (!isAdded) return@onUi
+                offsetSec = result.offsetSec
+                offsetLabel?.text = UiText.t("偏移 ${"%.1f".format(offsetSec)}s", "Offset ${"%.1f".format(offsetSec)}s")
+                showLyrics(result.lines, result.from, err)
             }
         }
     }
@@ -326,6 +329,11 @@ class LyricFragment : Fragment() {
             toggleSearchMode()
         } else if (parentFragmentManager.backStackEntryCount > 0) {
             runCatching { parentFragmentManager.popBackStack() }
+        } else if (containerId != 0) {
+            // 无 backstack(从侧栏直接 replace 进入):回退到首页,避免"返回"死键
+            parentFragmentManager.beginTransaction()
+                .replace(containerId, HomeFragment.newInstance(containerId))
+                .commit()
         }
     }
 
@@ -387,7 +395,12 @@ class LyricFragment : Fragment() {
         /** 用户触摸歌词列表后暂停自动跟随的时长(ms) */
         private const val FOLLOW_SUPPRESS_MS = 3000L
 
-        fun newInstance(): LyricFragment = LyricFragment()
+        private const val KEY_CONTAINER = "containerId"
+
+        fun newInstance(containerId: Int = 0): LyricFragment =
+            LyricFragment().apply {
+                setArguments(DataSet().apply { put(KEY_CONTAINER, containerId) })
+            }
     }
 }
 

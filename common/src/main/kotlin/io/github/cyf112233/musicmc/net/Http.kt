@@ -1,6 +1,5 @@
 package io.github.cyf112233.musicmc.net
 
-import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.github.cyf112233.musicmc.client.UiText
@@ -35,8 +34,6 @@ object Http {
     /** 默认 Referer:哔哩哔哩(唯一音源;CDN 图片 / 音频流需要) */
     private const val REFERER = "https://www.bilibili.com/"
 
-    private val gson = Gson()
-
     /** 通用客户端:跟随重定向、连接超时 15s */
     private val client: HttpClient by lazy {
         HttpClient.newBuilder()
@@ -46,8 +43,11 @@ object Http {
     }
 
     /**
-     * 音频流客户端:独立实例,不设请求超时(修复长音频流 90s 超时问题),
-     * 只设连接超时 15s;保留跟随重定向(音频直链 / 302 都需要)。
+     * 音频流客户端:独立实例,不设 body 读取超时(修复长音频流 90s 超时问题),
+     * 但请求保留"响应头等待"超时 120s(见 [openStreamInfo])—— JDK HttpClient 的
+     * request timeout 只覆盖到响应头到达,不影响后续 body 读取;CDN 连接成功却挂死
+     * 不响应时,无超时会让播放/预加载线程永久阻塞且连接永不释放。
+     * 保留跟随重定向(音频直链 / 302 都需要)。
      */
     private val streamClient: HttpClient by lazy {
         HttpClient.newBuilder()
@@ -188,6 +188,7 @@ object Http {
      */
     fun openStreamInfo(url: String, rangeStart: Long = -1, referer: String? = null, rangeEnd: Long = -1): StreamInfo {
         val builder = HttpRequest.newBuilder(URI.create(url))
+            .timeout(Duration.ofSeconds(120))
             .headers(*baseHeaders(referer))
             .GET()
         if (rangeStart >= 0) {

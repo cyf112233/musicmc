@@ -101,12 +101,18 @@ class BilibiliLoginFragment : Fragment() {
         Async.executor.execute {
             try {
                 val qr = BiliHttp.qrGenerate()
-                // 重活(矩阵编码 + PNG 编码 + 解码成纹理)全部在后台线程;UI 线程只 setImage
-                val image = QrCode.pngBytes(qr.url)?.let { png ->
-                    runCatching { Image.createTextureFromBitmap(BitmapFactory.decodeByteArray(png, 0, png.size)) }.getOrNull()
-                }
+                // 重活(矩阵编码 + PNG 编码)在后台线程;纹理创建
+                // (Image.createTextureFromBitmap,内部涉及 GL 资源)必须回 UI 线程 ——
+                // 与 AsyncImageLoader 的线程约定一致,后台线程创建会导致部分
+                // GL 驱动上纹理无效 / 崩溃
+                val png = QrCode.pngBytes(qr.url)
                 Async.onUi {
                     if (gen != generation || !isAdded) return@onUi
+                    val image = png?.let { p ->
+                        runCatching {
+                            Image.createTextureFromBitmap(BitmapFactory.decodeByteArray(p, 0, p.size))
+                        }.getOrNull()
+                    }
                     if (image != null) {
                         qrImage?.setImage(image)
                     }

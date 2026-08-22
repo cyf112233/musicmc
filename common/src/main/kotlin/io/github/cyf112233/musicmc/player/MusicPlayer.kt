@@ -45,9 +45,13 @@ class MusicPlayer(
      */
     val queue: MutableList<Song> = CopyOnWriteArrayList()
 
+    /** @Volatile:index 由 UI 线程(play/prev/next)与播放线程(handleFinished 自动切歌)交叉写 */
+    @Volatile
     var index = -1
         private set
 
+    /** @Volatile:mode 由 UI 线程 cycleMode 写,播放线程 handleFinished 读 */
+    @Volatile
     var mode = PlayMode.SEQUENCE
         private set
 
@@ -55,6 +59,8 @@ class MusicPlayer(
     var state = PlayerState.IDLE
         private set
 
+    /** @Volatile:UI 线程写,渲染线程(MusicHudRenderer.onFrame)HUD 每帧读 */
+    @Volatile
     var current: Song? = null
         private set
 
@@ -79,11 +85,17 @@ class MusicPlayer(
     fun removeListener(l: PlayerListener) = listeners.remove(l)
 
     private fun notifyStateChanged() {
-        Async.onUi { for (l in listeners) l.onStateChanged(state, current) }
+        // 先捕获快照再投递:Async.onUi 是异步排队,若在 lambda 里再读 state/current,
+        // UI 线程繁忙时可能拿到"最新值"而非通知时刻的值(状态跳变,如 LOADING 未
+        // 显示直接跳到 PLAYING)
+        val s = state
+        val c = current
+        Async.onUi { for (l in listeners) l.onStateChanged(s, c) }
     }
 
     private fun notifySongChanged() {
-        Async.onUi { for (l in listeners) l.onSongChanged(current) }
+        val c = current
+        Async.onUi { for (l in listeners) l.onSongChanged(c) }
     }
 
     private fun notifyProgress(posMs: Int, durationMs: Int) {
@@ -257,14 +269,16 @@ class MusicPlayer(
             PlayMode.SHUFFLE -> if (queue.size <= 1) 0 else random.nextInt(queue.size)
             else -> (index + 1) % queue.size
         }
-        play(queue[nextIndex])
+        // getOrNull:UI 线程 clear/addAll 与播放线程并发时 size 与 get 之间队列可能
+        // 被换小 → 越界;取不到则静默(状态由下一次状态变更兜底)
+        queue.getOrNull(nextIndex)?.let { play(it) }
     }
 
     /** 上一首(手动) */
     fun prev() {
         if (queue.isEmpty()) return
         // Kotlin 2.4.0 中 Int.floorMod 已被移除,改用 java.lang.Math.floorMod(语义一致)
-        play(queue[java.lang.Math.floorMod(index - 1, queue.size)])
+        queue.getOrNull(java.lang.Math.floorMod(index - 1, queue.size))?.let { play(it) }
     }
 
     fun seekTo(positionMs: Int) {
@@ -307,13 +321,19 @@ class MusicPlayer(
      * 播放完毕(引擎回调,播放线程):按播放模式自动切歌。
      * 单曲队列(size<=1)时 next() 会重播同一首,SEQUENCE 模式走 stopPlayback 直接停止。
      * 注意这里会调用 [play],其中 engine.stop() 有"播放线程自身调用"保护,不会死锁。
+     * 下标计算与取值之间队列可能被 UI 线程替换(getOrNull 防越界;取不到即停止)。
      */
     private fun handleFinished() {
         when (mode) {
             PlayMode.LOOP_ONE -> current?.let { play(it) }
             PlayMode.SHUFFLE -> next()
-            PlayMode.SEQUENCE -> if (index < queue.size - 1) play(queue[index + 1]) else stopPlayback()
-            PlayMode.LOOP_ALL -> if (queue.isNotEmpty()) play(queue[(index + 1) % queue.size])
+            // SEQUENCE:非末尾 → 下一首;末尾(或竞态下取不到) → 停止
+            PlayMode.SEQUENCE -> if (index < queue.size - 1) {
+                queue.getOrNull(index + 1)?.let { play(it) } ?: stopPlayback()
+            } else {
+                stopPlayback()
+            }
+            PlayMode.LOOP_ALL -> if (queue.isNotEmpty()) queue.getOrNull((index + 1) % queue.size)?.let { play(it) }
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
+import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.client.UiText
 
 /**
@@ -266,7 +267,7 @@ object YaclTheme {
         if (coverUrl != null) {
             // 行首缩略封面(12px 圆角块;未就绪时深色占位)
             val coverSize = (rowH - 6).coerceAtLeast(10)
-            val coverId = io.github.cyf112233.musicmc.client.RowCoverCache.identifier(coverUrl)
+            val coverId = RowCoverCache.identifier(coverUrl)
             if (coverId != null) {
                 g.drawTexture(coverId, x + 4, y + 3, coverSize, coverSize)
             } else {
@@ -274,7 +275,7 @@ object YaclTheme {
             }
             textX = x + 4 + coverSize + 6
         }
-        drawTextClipped(g, title.ifBlank { io.github.cyf112233.musicmc.client.UiText.t("未知标题", "Unknown") }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
+        drawTextClipped(g, title.ifBlank { UiText.t("未知标题", "Unknown") }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
         drawTextClipped(g, artist, textX, y + 12, 9f, x + w - textX - 6, colorTextDim)
     }
 
@@ -298,7 +299,7 @@ object YaclTheme {
         } else if (hover) {
             g.fill(x, y, x + w, y + rowH, colorRowHover)
         }
-        drawTextClipped(g, title.ifBlank { io.github.cyf112233.musicmc.client.UiText.t("未命名", "Unnamed") }, x + 6, y + 2, 11f, w - 12, colorTextMain)
+        drawTextClipped(g, title.ifBlank { UiText.t("未命名", "Unnamed") }, x + 6, y + 2, 11f, w - 12, colorTextMain)
         drawTextClipped(g, sub, x + 6, y + 14, 9f, w - 12, colorTextDim)
     }
 

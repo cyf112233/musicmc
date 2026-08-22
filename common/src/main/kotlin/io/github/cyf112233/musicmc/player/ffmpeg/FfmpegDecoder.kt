@@ -182,6 +182,9 @@ class FfmpegDecoder {
     // ---- AVIO HTTP 状态(仅 HTTP 打开路径使用)----
     private val httpLock = Object()
 
+    /** AVIO read 回调的复用读缓冲(受 httpLock 保护,单线程串行;按需扩容) */
+    private var readBuf = ByteArray(0)
+
     /**
      * 当前 HTTP 流。@Volatile:interruptRead 无锁直接读取并 close,打断阻塞中的
      * avioRead(见 interruptRead 的锁说明)。锁内(avioRead/avioSeekTo/openHttpStream/
@@ -235,9 +238,7 @@ class FfmpegDecoder {
     @Synchronized
     fun open(url: String, referer: String?, backupUrls: List<String>, cacheSink: ((Long, ByteArray, Int) -> Unit)? = null) {
         if (!nativeAvailable()) throw FfmpegUnavailableException(UiText.t("FFmpeg 原生库不可用", "FFmpeg native libs unavailable"))
-        synchronized(this) {
-            if (closed) throw IOException(UiText.t("解码器已关闭", "decoder closed"))
-        }
+        if (closed) throw IOException(UiText.t("解码器已关闭", "decoder closed"))
         this.cacheSink = cacheSink
         // 本地文件路径(完整缓存 / 冒烟):直接 file 协议打开,无需 referer/备用/缓存
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -457,7 +458,11 @@ class FfmpegDecoder {
         return ms
     }
 
-    /** swr 上下文惰性创建;帧参数(率/声道/采样格式)变化时重新创建 */
+    /**
+     * swr 上下文惰性创建一次(以**首帧**采样率/声道/格式配置;之后帧参数变化不重建)。
+     * 注:输出固定为原采样率/原声道 s16 交错,主流音频流(单歌曲全程同一参数)不受影响;
+     * 若未来要支持中途变参流,需在此比对 frm 参数并 swr_free 旧上下文重建(注意防泄漏)。
+     */
     private fun ensureSwr(frm: AVFrame, ch: Int, rate: Int, fmt: Int): SwrContext {
         val cur = swrCtx
         if (cur != null && !cur.isNull) return cur
@@ -667,8 +672,10 @@ class FfmpegDecoder {
             if (closed) return AVERROR_EOF
             val s = httpStream ?: return AVERROR_EOF
             try {
-                val tmp = ByteArray(bufSize)
-                val n = s.read(tmp)
+                // 复用读缓冲(受 httpLock 保护,单线程串行,无并发):
+                // 高频路径每次回调分配 64KB 会持续制造 GC 压力
+                if (readBuf.size < bufSize) readBuf = ByteArray(bufSize)
+                val n = s.read(readBuf, 0, bufSize)
                 if (n < 0) {
                     if (!readEofLogged) {
                         readEofLogged = true
@@ -678,10 +685,10 @@ class FfmpegDecoder {
                 } else if (n == 0) {
                     0
                 } else {
-                    buf.put(tmp, 0, n)
+                    buf.put(readBuf, 0, n)
                     val offset = httpPos
                     httpPos += n
-                    cacheSink?.invoke(offset, tmp, n)
+                    cacheSink?.invoke(offset, readBuf, n)
                     n
                 }
             } catch (e: Exception) {
@@ -750,6 +757,11 @@ class FfmpegDecoder {
     }
 
     private fun closeNative() {
+        // 关闭本解码器持有的 Java HTTP 流:open() 候选失败路径仅调 closeNative(不经过
+        // close() 的 httpLock 关闭段),此处补齐使"closeNative 释放全部资源"语义完整;
+        // 幂等(已关闭流 close 无害),且在 close() 内调用时 close 已先关过,双重安全。
+        runCatching { httpStream?.close() }
+        httpStream = null
         // 关键:每次手动 C 层释放(avcodec_free_context 等)后,立即对同一 Java 对象调
         // deallocate(false) —— 从 javacpp GC 队列 DeallocatorReference 摘除并停止 Ghost 回放,
         // 防止会话结束后对象被 GC 回收时 DeallocatorThread 对已释放地址二次 free

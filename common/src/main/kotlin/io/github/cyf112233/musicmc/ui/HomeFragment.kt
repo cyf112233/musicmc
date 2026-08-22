@@ -33,9 +33,6 @@ class HomeFragment : Fragment() {
 
     private val containerId: Int get() = requireArguments().getInt(KEY_CONTAINER, 0)
 
-    /** 滚动区内的内容容器(重建时 removeAllViews + 重新加载) */
-    private var contentView: LinearLayout? = null
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: DataSet?): View {
         val context = requireContext()
         val root = LinearLayout(context).apply {
@@ -48,20 +45,11 @@ class HomeFragment : Fragment() {
             // 页边距 16dp:卡片与屏幕边缘保持留白
             setPadding(dp(16f), dp(8f), dp(16f), dp(16f))
         }
-        contentView = content
         scroll.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
 
         buildContent(context, content)
         return root
-    }
-
-    /** 重建本页内容(排行榜区重新加载)。 */
-    fun reload() {
-        val content = contentView ?: return
-        if (!isAdded || view == null) return
-        content.removeAllViews()
-        buildContent(requireContext(), content)
     }
 
     // ---------------- 内容构建 ----------------

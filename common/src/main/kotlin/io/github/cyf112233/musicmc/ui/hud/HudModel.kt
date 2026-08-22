@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.hud
 import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.model.Song
 import io.github.cyf112233.musicmc.player.MusicPlayer
+import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.ui.Widgets
 import io.github.cyf112233.musicmc.util.Lrc
 import kotlin.math.roundToInt
@@ -58,7 +59,8 @@ data class CachedHudLyric(
 )
 
 /**
- * HUD 布局计算(纯数据 + 布局,零 net.minecraft 依赖)。
+ * HUD 布局计算(纯数据 + 布局,不直接操作 net.minecraft 渲染 API;
+ * 仅经 UiText 读游戏语言做文案,该访问有 runCatching 兜底,渲染线程安全)。
  *
  * 约定:
  * - 锚点 [hudX]/[hudY] = 面板左上角的屏幕归一化坐标(0..1,由设置 / HUD 编辑器持久化);
@@ -192,7 +194,7 @@ object HudLayout {
             song = song,
             panel = HudRect(px, py, panelW, panelH),
             cover = HudRect(coverX, rowTop, coverSize, coverSize),
-            title = song.title.ifBlank { "未知标题" },
+            title = song.title.ifBlank { UiText.t("未知标题", "Unknown") },
             titleX = textX,
             titleY = titleY,
             artist = song.artist,

@@ -32,6 +32,10 @@ object BiliActions {
 
     private val states = ConcurrentHashMap<String, State>()
 
+    /** bvid → 点赞操作互斥锁(串行化 toggleLike:防快速双击时两个任务都读到
+     *  liked==null、各自反向切换一次,最终状态与 UI 显示相反) */
+    private val likeLocks = ConcurrentHashMap<String, Any>()
+
     private fun stateOf(bvid: String): State = states.computeIfAbsent(bvid) { State() }
 
     /**
@@ -71,6 +75,7 @@ object BiliActions {
      * 点赞 / 取消点赞切换。
      * 流程:内存缓存优先取当前态,否则 [BiliHttp.hasLiked] → 反向调 [BiliHttp.like] → 更新缓存。
      * 未登录 → cb(false, "请先在设置中登录 B 站")。回调 (liked: Boolean 切换后的新状态, err) 在 UI 线程。
+     * 按 bvid 加锁串行化:快速双击时第二个任务等待第一个完成后再读状态,避免双切换。
      */
     fun toggleLike(song: Song, cb: (Boolean, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
@@ -79,29 +84,32 @@ object BiliActions {
         }
         val bvid = song.id
         val state = stateOf(bvid)
+        val lock = likeLocks.computeIfAbsent(bvid) { Any() }
         Async.run {
-            var liked = false
-            var err: String? = null
-            try {
-                // 当前态:内存缓存优先,否则 hasLiked 查询
-                if (state.liked == null) {
-                    var current = false
-                    var qErr: String? = null
-                    BiliHttp.hasLiked(bvid) { v, e -> current = v; qErr = e }
-                    if (qErr != null) throw IOException(qErr)
-                    state.liked = current
+            synchronized(lock) {
+                var liked = false
+                var err: String? = null
+                try {
+                    // 当前态:内存缓存优先,否则 hasLiked 查询
+                    if (state.liked == null) {
+                        var current = false
+                        var qErr: String? = null
+                        BiliHttp.hasLiked(bvid) { v, e -> current = v; qErr = e }
+                        if (qErr != null) throw IOException(qErr)
+                        state.liked = current
+                    }
+                    // 反向切换
+                    val target = state.liked != true
+                    var likeErr: String? = null
+                    BiliHttp.like(bvid, target) { e -> likeErr = e }
+                    if (likeErr != null) throw IOException(likeErr)
+                    state.liked = target
+                    liked = target
+                } catch (e: Exception) {
+                    err = e.message ?: UiText.t("点赞操作失败", "Failed to like")
                 }
-                // 反向切换
-                val target = state.liked != true
-                var likeErr: String? = null
-                BiliHttp.like(bvid, target) { e -> likeErr = e }
-                if (likeErr != null) throw IOException(likeErr)
-                state.liked = target
-                liked = target
-            } catch (e: Exception) {
-                err = e.message ?: UiText.t("点赞操作失败", "Failed to like")
+                Async.onUi { cb(liked, err) }
             }
-            Async.onUi { cb(liked, err) }
         }
     }
 
@@ -197,7 +205,8 @@ object BiliActions {
     /**
      * 切换当前视频在指定收藏夹的收藏态(收藏夹选择器点行调用):
      * 在夹 → [BiliHttp.favDel] 移出;不在 → [BiliHttp.favAdd] 加入;成功后增量更新 [folderFavs]。
-     * 90022("已在该收藏夹",缓存过期场景)按已加入成功处理。回调 (faved 切换后的新状态, err) 在 UI 线程。
+     * 90022("已在该收藏夹",缓存过期场景)由 favAdd 结构化返回 alreadyInFolder=true,
+     * 按已加入成功处理(不再依赖文案字符串相等判断业务码)。回调 (faved 切换后的新状态, err) 在 UI 线程。
      */
     fun toggleFavInFolder(song: Song, folder: FavFolder, cb: (Boolean, String?) -> Unit) {
         if (!NetMusic.bilibiliLoggedIn()) {
@@ -213,16 +222,18 @@ object BiliActions {
                 val set = folderFavs.computeIfAbsent(bvid) { ConcurrentHashMap.newKeySet() }
                 val inFolder = folder.id in set
                 var opErr: String? = null
-                if (inFolder) BiliHttp.favDel(aid, folder.id) { e -> opErr = e }
-                else BiliHttp.favAdd(aid, folder.id) { e -> opErr = e }
+                var alreadyInFolder = false
+                if (inFolder) {
+                    BiliHttp.favDel(aid, folder.id) { e -> opErr = e }
+                } else {
+                    BiliHttp.favAdd(aid, folder.id) { e, already -> opErr = e; alreadyInFolder = already }
+                }
                 if (opErr != null) {
-                    if (opErr == UiText.t("已在该收藏夹", "Already in this folder")) {
-                        // 缓存过期:实际已在夹,按加入成功处理
-                        set.add(folder.id)
-                        faved = true
-                    } else {
-                        throw IOException(opErr)
-                    }
+                    throw IOException(opErr)
+                } else if (alreadyInFolder) {
+                    // 缓存过期:实际已在夹,按加入成功处理
+                    set.add(folder.id)
+                    faved = true
                 } else {
                     if (inFolder) set.remove(folder.id) else set.add(folder.id)
                     faved = !inFolder

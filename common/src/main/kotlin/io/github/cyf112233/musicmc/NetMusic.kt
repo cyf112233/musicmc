@@ -19,6 +19,10 @@ import io.github.cyf112233.musicmc.client.UiText
  * 纯哔哩哔哩音源:无音源切换,source 为唯一实例;登录态(扫码)可选。
  */
 object NetMusic {
+    /** @Volatile:ModernUI 模式下 MUI UI 线程写(updateConfig)、MC 渲染线程
+     *  (MusicHudRenderer.onFrame 每帧)读 —— 无 volatile 时渲染线程可能长期看到
+     *  旧配置(HUD 不刷新 / 开关失效),是跨线程数据竞争 */
+    @Volatile
     lateinit var config: ModConfig
         private set
 

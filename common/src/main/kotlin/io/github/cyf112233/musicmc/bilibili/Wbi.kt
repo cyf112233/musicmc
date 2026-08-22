@@ -1,6 +1,5 @@
 package io.github.cyf112233.musicmc.bilibili
 
-import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
@@ -11,8 +10,7 @@ import java.security.MessageDigest
  * 要点(见任务调研事实):
  * - mixinKey = 按 MIXIN_KEY_ENC_TAB 顺序从 (imgKey + subKey) 取字符,取前 32 个;
  * - 签名 = 参数(过滤 null)+ wts(秒级时间戳)→ 按 key 字典序排序 →
- *   拼 "k=v" 并以 wbi 编码(UTF-8 百分号编码,空格 %20,* → %2A)拼接 →
- *   md5(query + mixinKey) → w_rid。
+ *   拼 "k=v" 并以 wbi 编码(见 [encode])拼接 → md5(query + mixinKey) → w_rid。
  */
 object Wbi {
 
@@ -23,6 +21,32 @@ object Wbi {
         37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
         22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
     )
+
+    /** wbi 编码的保留字符:除字母数字与这些字符外全部百分号编码。
+     *  规范(JS encodeURIComponent 语义 + 社区实现一致约定):
+     *  - 保留 `!'()*-._~`(encodeURIComponent 不编码的集合);
+     *  - 空格 → `%20`(而非 `+`);
+     *  - `*` → `%2A`(社区实现对 encodeURIComponent 的唯一覆写)。
+     *  不能用 java.net.URLEncoder:它会额外把 `~ ! ' ( )` 编码为
+     *  %7E %21 %27 %28 %29,与 wbi 规范不一致,含此类字符的关键词签名校验会失败。 */
+    fun encode(s: String): String {
+        val sb = StringBuilder(s.length)
+        for (ch in s) {
+            when {
+                ch == ' ' -> sb.append("%20")
+                ch == '*' -> sb.append("%2A")
+                ch.isLetterOrDigit() || ch in "!'()*-._~" -> sb.append(ch)
+                else -> {
+                    // 其余字符按 UTF-8 逐字节百分号编码
+                    for (b in ch.toString().toByteArray(StandardCharsets.UTF_8)) {
+                        sb.append('%').append("0123456789ABCDEF"[((b.toInt() ushr 4) and 0xF)])
+                            .append("0123456789ABCDEF"[b.toInt() and 0xF])
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
 
     /**
      * 由 nav 接口的 imgKey/subKey 生成 mixin key。
@@ -35,12 +59,6 @@ object Wbi {
         for (i in 0 until 32) sb.append(s[MIXIN_KEY_ENC_TAB[i]])
         return sb.toString()
     }
-
-    /** wbi 参数编码:UTF-8 百分号编码,空格 → %20,* → %2A(与调研事实一致) */
-    fun encode(s: String): String =
-        URLEncoder.encode(s, StandardCharsets.UTF_8.name())
-            .replace("+", "%20")
-            .replace("*", "%2A")
 
     /**
      * 对 [params] 做 wbi 签名,返回带 wts/w_rid 的新参数表(不含 null 值)。

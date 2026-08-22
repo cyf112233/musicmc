@@ -314,6 +314,11 @@ class SettingsFragment : Fragment() {
                 setOnClickListener {
                     if (parentFragmentManager.backStackEntryCount > 0) {
                         runCatching { parentFragmentManager.popBackStack() }
+                    } else if (containerId != 0) {
+                        // 无 backstack(从侧栏直接 replace 进入):回退到首页,避免"返回"死键
+                        parentFragmentManager.beginTransaction()
+                            .replace(containerId, HomeFragment.newInstance(containerId))
+                            .commit()
                     }
                 }
             },

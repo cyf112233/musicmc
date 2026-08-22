@@ -214,8 +214,9 @@ object BiliHttp {
         )
         val json = try {
             wbiGet("/x/player/wbi/playurl", params)
-        } catch (e: Exception) {
-            // wbi 获取密钥失败等场景:回退未签名请求
+        } catch (e: WbiKeyUnavailableException) {
+            // 仅"签名密钥获取失败"回退未签名(实测未签名也可用);
+            // 网络超时 / 解析失败等真实错误不回退,直接抛出,避免双倍延迟与掩盖根因
             get("/x/player/wbi/playurl", params)
         }
         checkCode(json, UiText.t("播放地址", "Play URL"))
@@ -230,7 +231,7 @@ object BiliHttp {
         val params = mapOf("bvid" to bvid, "cid" to cid)
         val json = try {
             wbiGet("/x/player/wbi/v2", params)
-        } catch (e: Exception) {
+        } catch (e: WbiKeyUnavailableException) {
             get("/x/player/wbi/v2", params)
         }
         checkCode(json, UiText.t("字幕信息", "Subtitle info"))
@@ -423,11 +424,16 @@ object BiliHttp {
 
     /**
      * 加入收藏夹(POST /x/v3/fav/resource/deal,form rid=aid/type=2/add_media_ids=fid/csrf)。
-     * code==0 成功;90022(已在该收藏夹)按业务提示返回,不视为网络失败。
+     * 回调 (err, alreadyInFolder):
+     * - code==0 成功:cb(null, false);
+     * - 90022(已在该收藏夹):cb(null, true)—— 目标(在夹)已达成,不算失败;
+     * - 其余业务码:cb(中文错误, false)。
+     * alreadyInFolder 是结构化业务信息,避免调用方用"文案字符串相等"判断业务码
+     * (翻译一改即失效)。
      */
-    fun favAdd(aid: Long, fid: Long, cb: (String?) -> Unit) {
+    fun favAdd(aid: Long, fid: Long, cb: (String?, Boolean) -> Unit) {
         val token = csrf()
-        if (token.isNullOrBlank()) { cb(UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first")); return }
+        if (token.isNullOrBlank()) { cb(UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first"), false); return }
         val json = try {
             post(
                 "/x/v3/fav/resource/deal",
@@ -439,13 +445,13 @@ object BiliHttp {
                 ),
             )
         } catch (e: Exception) {
-            cb(e.message ?: UiText.t("收藏操作失败", "Failed to add favorite"))
+            cb(e.message ?: UiText.t("收藏操作失败", "Failed to add favorite"), false)
             return
         }
         when (val code = json.get("code").optInt()) {
-            0 -> cb(null)
-            90022 -> cb(UiText.t("已在该收藏夹", "Already in this folder"))
-            else -> cb(codeError(json, UiText.t("收藏", "Add favorite")) ?: UiText.t("收藏操作失败", "Failed to add favorite"))
+            0 -> cb(null, false)
+            90022 -> cb(null, true) // 已在该收藏夹:目标已达成,按成功处理
+            else -> cb(codeError(json, UiText.t("收藏", "Add favorite")) ?: UiText.t("收藏操作失败", "Failed to add favorite"), false)
         }
     }
 
@@ -563,7 +569,9 @@ object BiliHttp {
         val imgUrl = wbiImg?.optString("img_url")
         val subUrl = wbiImg?.optString("sub_url")
         if (imgUrl.isNullOrBlank() || subUrl.isNullOrBlank()) {
-            throw IOException(UiText.t("获取 wbi 密钥失败:响应缺少 wbi_img", "Failed to get wbi key: response missing wbi_img"))
+            // 专用异常:playurl/subtitle 只对"签名密钥获取失败"回退未签名,
+            // 网络/解析类真实错误不在此列
+            throw WbiKeyUnavailableException(UiText.t("获取 wbi 密钥失败:响应缺少 wbi_img", "Failed to get wbi key: response missing wbi_img"))
         }
         wbiImgKey = filenameWithoutExtension(imgUrl)
         wbiSubKey = filenameWithoutExtension(subUrl)
@@ -621,24 +629,41 @@ object BiliHttp {
         val code = json.get("code").takeIf { it.isJsonPrimitive }?.asInt ?: -1
         if (code != 0) {
             val msg = json.get("message").takeIf { it.isJsonPrimitive }?.asString
-            throw IOException("${what} failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}")
+            // what 已是按语言本地化的名称(如"播放地址"/"Play URL"),code/message 保持原文;
+            // 组织成中英双语,满足 MusicSource 契约"err 为中文错误信息"
+            throw IOException(
+                UiText.t(
+                    "$what 失败(code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}",
+                    "$what failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}",
+                ),
+            )
         }
     }
 
     /**
-     * 业务 code != 0 时返回中文错误消息(不抛异常),code==0 返回 null。
+     * 业务 code != 0 时返回错误消息(不抛异常),code==0 返回 null。
      * 供需要区分特殊业务码(65006 重复点赞 / 90022 已在收藏夹)的调用方使用。
+     * 返回文案为中英双语(what 已本地化,code/message 保持原文)。
      */
     private fun codeError(json: JsonObject, what: String): String? {
         val code = json.get("code").takeIf { it.isJsonPrimitive }?.asInt ?: -1
         if (code == 0) return null
         val msg = json.get("message").takeIf { it.isJsonPrimitive }?.asString
-        return "${what} failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}"
+        return UiText.t(
+            "$what 失败(code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}",
+            "$what failed (code=$code)${if (msg.isNullOrBlank()) "" else ": $msg"}",
+        )
     }
 
     private fun filenameWithoutExtension(url: String): String =
         url.substringAfterLast('/').substringBeforeLast('.').takeIf { it.isNotEmpty() } ?: url
 }
+
+/**
+ * wbi 签名密钥获取失败(仅此异常触发 playurl/subtitle 回退未签名请求;
+ * 网络 / 解析类真实错误直接抛出,不回退)。
+ */
+class WbiKeyUnavailableException(message: String) : IOException(message)
 
 // ---------------- 登录相关数据类型 ----------------
 
@@ -681,11 +706,29 @@ data class FavFolder(
 internal fun JsonObject?.optString(key: String): String? =
     this?.get(key)?.takeIf { it.isJsonPrimitive }?.asString
 
+/**
+ * 防御式取 Int:非数字 JSON 元素返回 0。
+ * 注意不能直接 `asInt`:对 isJsonPrimitive 的**字符串**元素(如字段类型从 number
+ * 变成 string,或内容为 "abc" / "12.5")Gson 会抛 NumberFormatException,这里兜底。
+ */
 internal fun JsonElement?.optInt(): Int =
-    this?.takeIf { it.isJsonPrimitive }?.asInt ?: 0
+    this?.takeIf { it.isJsonPrimitive }?.let { e ->
+        try {
+            e.asInt
+        } catch (_: NumberFormatException) {
+            0
+        }
+    } ?: 0
 
+/** 防御式取 Long:非数字 JSON 元素返回 0(容错逻辑同 [optInt]) */
 internal fun JsonElement?.optLong(): Long =
-    this?.takeIf { it.isJsonPrimitive }?.asLong ?: 0L
+    this?.takeIf { it.isJsonPrimitive }?.let { e ->
+        try {
+            e.asLong
+        } catch (_: NumberFormatException) {
+            0L
+        }
+    } ?: 0L
 
 internal fun JsonObject?.optArray(key: String): JsonArray? =
     this?.get(key)?.takeIf { it.isJsonArray }?.asJsonArray

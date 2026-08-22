@@ -214,7 +214,8 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
                 seekFrom(x)
                 return true
             }
-            rectVolume.hit(x, y) -> {
+            // 音量条绘制高度仅 4px,命中区放宽 ±4px(与 hover 视觉一致),否则难点中
+            x >= rectVolume.x1 - 4 && x < rectVolume.x2 + 4 && y >= rectVolume.y1 - 4 && y <= rectVolume.y2 + 4 -> {
                 draggingVolume = true
                 volumeFrom(x)
                 return true

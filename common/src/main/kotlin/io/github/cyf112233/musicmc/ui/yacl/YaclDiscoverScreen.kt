@@ -5,6 +5,7 @@ import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.Playlist
+import io.github.cyf112233.musicmc.util.Async
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -31,7 +32,10 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal(Ui
     private fun load() {
         error = null
         NetMusic.source.homePlaylists { list, err ->
-            if (err != null) error = err else playlists = list
+            // 回调在后台线程(BilibiliSource 直接 executor.execute 回调):切 UI 线程更新
+            Async.onUi {
+                if (err != null) error = err else playlists = list
+            }
         }
     }
 
@@ -52,7 +56,7 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal(Ui
             return
         }
         if (error != null) {
-            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, UiText.t("加载失败: $error", "Failed: $error"), w / 2 - 100, h / 2 - 16, 11f, 200, YaclTheme.colorError)
             return
         }
         if (list!!.isEmpty()) {

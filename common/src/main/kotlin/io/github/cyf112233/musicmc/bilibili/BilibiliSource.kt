@@ -87,7 +87,12 @@ class BilibiliSource(
                 val selected = pickAudio(dash, audios)
                 val baseUrl = selected.optString("baseUrl")
                 if (baseUrl.isNullOrBlank()) throw IOException(UiText.t("播放地址为空", "Play URL is empty"))
-                val backups = selected.optArray("backupUrl")?.mapNotNull { it.asString } ?: emptyList()
+                val backups = selected.optArray("backupUrl")?.mapNotNull {
+                    // 防御:backupUrl 数组若混入非字符串元素,asString 会抛
+                    // IllegalStateException 使整条 songUrl 失败 —— 明明 baseUrl 可用
+                    // 却被丢弃;逐项判 isJsonPrimitive 再取
+                    if (it.isJsonPrimitive) it.asString else null
+                } ?: emptyList()
                 callback(
                     SongUrl(
                         url = baseUrl,
@@ -145,7 +150,7 @@ class BilibiliSource(
                     callback(emptyList(), UiText.t("该视频无 CC 字幕", "No CC subtitles for this video"))
                     return@execute
                 }
-                // 3) 中文优先,否则第一项
+                // 3) 中文优先,否则第一项(防御:subtitles 元素非对象时丢弃,不崩溃)
                 val selected = (subtitles.firstOrNull { e ->
                     if (e.isJsonObject) {
                         val o = e.asJsonObject
@@ -153,13 +158,16 @@ class BilibiliSource(
                         val doc = o.optString("lan_doc") ?: ""
                         lan.lowercase().contains("zh") || doc.contains("中")
                     } else false
-                } ?: subtitles.get(0)).asJsonObject
+                } ?: subtitles.firstOrNull { it.isJsonObject })?.asJsonObject
+                    ?: throw IOException(UiText.t("字幕数据异常", "Invalid subtitle data"))
                 val rawUrl = selected.optString("subtitle_url")
                     ?: throw IOException(UiText.t("字幕地址为空", "Subtitle URL is empty"))
                 // 4) 拉取字幕 JSON(subtitle_url 可能为协议相对 // 或绝对路径 /x/...)
                 val subJson = BiliHttp.subtitleContent(normalizeSubtitleUrl(rawUrl))
-                // 5) body[] → LyricLine。from 以秒为单位(实测文档形态;个别可能为毫秒,
-                //    用数值量级防御:超过 1000 视为毫秒不再乘)。
+                // 5) body[] → LyricLine。B 站 CC 字幕接口文档约定 from 以秒为单位
+                //    (aisubtitle JSON 规范,实测一致);按秒 ×1000 转毫秒。
+                //    注:不用"from>1000 视为毫秒"的启发式 —— 长视频(>16.7 分钟)的
+                //    秒数会超过 1000,启发式会把整首歌词时间轴标错(确定性数据错误)。
                 val body = subJson.optArray("body") ?: JsonArray()
                 val lines = body.mapNotNull { e ->
                     if (!e.isJsonObject) return@mapNotNull null
@@ -168,7 +176,7 @@ class BilibiliSource(
                         ?: return@mapNotNull null
                     val content = o.optString("content") ?: return@mapNotNull null
                     LyricLine(
-                        timeMs = if (from > 1000) from.toInt() else (from * 1000).toInt(),
+                        timeMs = (from * 1000).toInt().coerceAtLeast(0),
                         text = content.trim(),
                     )
                 }
@@ -223,8 +231,9 @@ class BilibiliSource(
         return Song(
             id = bvid,
             title = stripHtml(o.optString("title") ?: UiText.t("未知视频", "Unknown video")),
-            // 搜索是 author 字符串,排行榜是 owner.name
-            artist = o.optString("author")
+            // 搜索是 author 字符串,排行榜是 owner.name;
+            // 注意:author 存在但为空串时也要回退 owner.name(空串非 null,?: 不会触发)
+            artist = (o.optString("author")?.takeIf { it.isNotBlank() })
                 ?: o.optObject("owner")?.optString("name")
                 ?: "",
             album = UiText.t("哔哩哔哩", "Bilibili"),
@@ -256,7 +265,7 @@ class BilibiliSource(
 
     /** 去掉 <em class="keyword"> 等 HTML 标签并反转义 &amp; &lt; &gt; &quot; &#39; &nbsp; */
     private fun stripHtml(s: String): String {
-        var t = s.replace(Regex("<[^>]*>"), "")
+        var t = s.replace(TAG_REGEX, "")
         t = t.replace("&amp;", "&")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
@@ -264,6 +273,11 @@ class BilibiliSource(
             .replace("&#39;", "'")
             .replace("&nbsp;", " ")
         return t.trim()
+    }
+
+    private companion object {
+        /** 标签正则:每次调用复用一个实例(避免每首歌现场编译) */
+        val TAG_REGEX = Regex("<[^>]*>")
     }
 
     /** 封面:""//..." 补 https:;hdslb 存档图附缩略参数(可选,减小流量) */

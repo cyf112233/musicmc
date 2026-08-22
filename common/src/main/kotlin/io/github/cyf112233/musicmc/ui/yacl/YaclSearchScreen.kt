@@ -6,6 +6,7 @@ import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.model.Song
+import io.github.cyf112233.musicmc.util.Async
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
@@ -23,6 +24,10 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
     private var error: String? = null
     private var searching = false
     private var scroll = 0
+
+    /** 搜索请求序号:每次 doSearch 自增,过期请求的结果直接丢弃(先搜 "a" 再搜 "ab",
+     *  "a" 结果后到时不得覆盖新结果) */
+    private var searchGen = 0
 
     private var editBox: EditBox? = null
 
@@ -58,10 +63,10 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
         // 状态 / 错误
         var listY = 48
         if (error != null) {
-            YaclTheme.drawTextClipped(g, "Search failed: $error", width / 2 - 180, listY, 11f, 360, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, UiText.t("搜索失败: $error", "Search failed: $error"), width / 2 - 180, listY, 11f, 360, YaclTheme.colorError)
             listY += 16
         } else if (results.isEmpty() && !searching) {
-            YaclTheme.drawTextClipped(g, "Type a keyword and press Search or Enter", width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
+            YaclTheme.drawTextClipped(g, UiText.t("输入关键词,点搜索或回车", "Type a keyword and press Search or Enter"), width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
             listY += 16
         }
 
@@ -132,16 +137,22 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
     private fun doSearch() {
         val keyword = editBox?.getValue()?.trim().orEmpty()
         if (keyword.isEmpty() || searching) return
+        val gen = ++searchGen
         searching = true
         error = null
         scroll = 0
         NetMusic.source.search(keyword, 30, 0) { list, err ->
-            searching = false
-            if (err != null) {
-                error = err
-            } else {
-                results.clear()
-                results.addAll(list)
+            // 回调在后台线程(BilibiliSource 直接 executor.execute 回调):
+            // 切回 UI 线程再更新界面字段(否则与渲染线程的读取构成数据竞争)
+            Async.onUi {
+                if (gen != searchGen) return@onUi // 过期请求(又发了新搜索)丢弃
+                searching = false
+                if (err != null) {
+                    error = err
+                } else {
+                    results.clear()
+                    results.addAll(list)
+                }
             }
         }
     }

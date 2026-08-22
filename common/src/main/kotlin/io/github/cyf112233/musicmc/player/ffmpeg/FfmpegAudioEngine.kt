@@ -287,7 +287,10 @@ class FfmpegAudioEngine : AudioEngine {
                             // 首帧定格式后建 line;创建前确认本会话仍有效(与 M4a/Mp3 同一泄漏窗口防御)
                             if (stopped || mySession != sessionId) return
                             val audioLine = createOutput(audio.rate, audio.channels)
-                            line = audioLine
+                            // 会话守卫:createOutput 耗时窗口(SourceDataLine open 等)内
+                            // 新会话可能已把共享 field line 指到自己的 line —— 过期会话
+                            // 不得覆盖,否则 stopInternal/applyVolume 会作用到新会话的 line 上
+                            if (mySession == sessionId) line = audioLine
                             slot.line = audioLine
                             slot.batcher = PcmBatcher(audioLine)
                             lineOpened = true
@@ -352,10 +355,20 @@ class FfmpegAudioEngine : AudioEngine {
                 )
             }
         } finally {
-            runCatching { prefetchStream?.close() }
+            // 会话守卫:仅当前会话才 close 共享 prefetchStream —— 过期会话的预加载
+            // 线程已在自身 finally 用局部引用关闭自己的 body;此处若无条件 close 共享
+            // 字段会误关**新会话**正在下载的流(预加载静默中断)
+            if (mySession == sessionId) runCatching { prefetchStream?.close() }
             // 会话结束收尾:EOF 路径已由 finishCache 处理(complete 或保留 partial 等预加载补齐);
-            // 其余退出(手动停止/切歌/seek/全部候选失败)一律作废,不留垃圾 partial
-            if (!eofFinished) cacheWriter?.discard()
+            // 其余退出(手动停止/切歌/seek/全部候选失败)一律作废,不留垃圾 partial。
+            // 注意:seek/切歌是非阻塞切会话 —— 旧会话线程此刻可能已不是当前会话,
+            // 若仍无条件 discard() 会删除**新会话刚创建的 partial 文件**(旧 writer 的
+            // delete 删的是新 writer 正在写的路径)→ 新会话继续写已 unlink 的 inode,
+            // 结束时 rename 失败 → 缓存永远无法标完整。过期会话只 close() 句柄不删文件。
+            val cw = cacheWriter
+            if (cw != null && !eofFinished) {
+                if (mySession == sessionId) cw.discard() else cw.close()
+            }
             val myLine = slot.line
             try {
                 myLine?.stop()
@@ -399,6 +412,12 @@ class FfmpegAudioEngine : AudioEngine {
      * 后台预加载线程:独立 HTTP 连接**从 0 顺序下载到流尾**(覆盖探测/播放已写区段,
      * 并补全 seek 空洞),把"整首提前下载完成"变成常态。播放线程 AVIO 写与预加载写
      * 并发,由 CacheWriter 内部锁串行;失败/中断不影响播放。
+     *
+     * 资源纪律(2026-08 加固):
+     * - body 用**局部引用**并在线程 finally 关闭:正常 EOF(整首下载完成)路径此前
+     *   不会 close body → 每次预加载完成留一个挂起的 HTTP 连接;
+     * - 共享字段 [prefetchStream] 赋值带会话守卫:过期线程不得覆盖新会话的引用
+     *   (否则旧线程 finally 的 close 会误伤新会话正在下载的流 → 预加载静默中断)。
      */
     private fun startPrefetch(url: String, writer: AudioCache.CacheWriter, mySession: Int) {
         val log = io.github.cyf112233.musicmc.NetMusic.logger
@@ -406,9 +425,10 @@ class FfmpegAudioEngine : AudioEngine {
         prefetchAlive = true
         Thread({
             var off = 0L
+            var body: java.io.InputStream? = null
             try {
-                val body = Http.openStreamInfo(url, 0, referer).body
-                prefetchStream = body
+                body = Http.openStreamInfo(url, 0, referer).body
+                if (mySession == sessionId) prefetchStream = body
                 val tmp = ByteArray(64 * 1024)
                 while (!stopped && mySession == sessionId) {
                     val n = body.read(tmp)
@@ -427,8 +447,12 @@ class FfmpegAudioEngine : AudioEngine {
                 // 预加载失败(CDN 坏/断流):不影响播放,播放线程 AVIO 继续写缓存
                 log.warn("[Engine] session=$mySession 预加载中断(${e.javaClass.simpleName}: ${e.message})")
             } finally {
-                prefetchStream = null
-                prefetchAlive = false
+                runCatching { body?.close() }
+                // 会话守卫:过期线程不置 null/清 alive(那些状态属于新会话)
+                if (mySession == sessionId) {
+                    prefetchStream = null
+                    prefetchAlive = false
+                }
             }
         }, "NetMusic-Prefetch").apply { isDaemon = true; start() }
     }

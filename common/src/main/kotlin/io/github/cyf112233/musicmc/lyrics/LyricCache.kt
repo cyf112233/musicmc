@@ -88,9 +88,15 @@ object LyricCache {
         }
     }
 
-    /** 原子写:先写 .tmp 再 rename(与 Hub 服务端策略一致,避免半写文件) */
+    /** 原子写:先写唯一后缀 .tmp 再 rename(与 Hub 服务端策略一致,避免半写文件)。
+     *  tmp 文件名带进程内唯一序号:Async.executor 是多线程缓存线程池,load 的
+     *  hub/CC save 与 adjustOffset 的 saveOffset 可能并发写同一 key —— 固定 tmp 名
+     *  会交错写同一文件(截断/损坏),唯一后缀保证各写入者互不干扰,
+     *  rename 的 REPLACE_EXISTING 让最后完成的写入生效。 */
+    private val tmpSeq = java.util.concurrent.atomic.AtomicInteger(0)
+
     private fun atomicWrite(file: Path, content: String) {
-        val tmp = dir.resolve("${file.fileName}.tmp")
+        val tmp = dir.resolve("${file.fileName}.${tmpSeq.incrementAndGet()}.tmp")
         Files.writeString(tmp, content)
         try {
             Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)

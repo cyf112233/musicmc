@@ -7,6 +7,7 @@ import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.util.Lrc
 import io.github.cyf112233.musicmc.ui.Widgets
+import io.github.cyf112233.musicmc.util.Async
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -61,13 +62,20 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             error = null
             scroll = 0
             autoFollow = true
-            NetMusic.source.lyric(song.id) { list, err ->
-                if (err != null) {
-                    error = err
-                    loaded = true
-                } else {
-                    lines = list
-                    loaded = true
+            val reqSongId = song.id
+            NetMusic.source.lyric(reqSongId) { list, err ->
+                // 回调在后台线程(BilibiliSource 直接 executor.execute 回调):
+                // 切 UI 线程更新;并校验请求时的歌曲 id —— 快速切歌后旧请求晚到
+                // 不得覆盖新歌的歌词(否则显示与当前歌不匹配的歌词直到再次切歌)
+                Async.onUi {
+                    if (reqSongId != player.current?.id) return@onUi
+                    if (err != null) {
+                        error = err
+                        loaded = true
+                    } else {
+                        lines = list
+                        loaded = true
+                    }
                 }
             }
         }
@@ -76,7 +84,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             return
         }
         if (error != null) {
-            YaclTheme.drawTextClipped(g, "Failed to load lyrics: $error", w / 2 - 100, 40, 11f, 200, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, UiText.t("歌词加载失败: $error", "Failed to load lyrics: $error"), w / 2 - 100, 40, 11f, 200, YaclTheme.colorError)
             return
         }
         if (lines.isEmpty()) {
@@ -98,6 +106,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
 
         // Lyrics列表
         val listX = w / 2 - 160
+        val textMaxW = 318
         var idx = scroll
         var y = listTop
         while (idx < lines.size && y + rowH < h - 8) {
@@ -109,11 +118,15 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
                 else -> YaclTheme.colorTextFaint
             }
             if (isCurrent) {
-                g.fill(listX - 6, y, listX + 320, y + rowH, YaclTheme.colorRowCurrent)
+                g.fill(listX - 6, y, listX + textMaxW, y + rowH, YaclTheme.colorRowCurrent)
                 g.fill(listX - 6, y, listX - 3, y + rowH, YaclTheme.colorAccent)
             }
-            YaclTheme.drawTextClipped(g, line.text, listX, y + 2, if (isCurrent) 12f else 11f, 320, color)
-            YaclTheme.drawTextClipped(g, Widgets.formatTime(line.timeMs), listX + 318, y + 5, 8f, 42, YaclTheme.colorTextFaint)
+            YaclTheme.drawTextClipped(g, line.text, listX, y + 2, if (isCurrent) 12f else 11f, textMaxW, color)
+            // 时间列:右对齐到列表右端(旧实现左对齐锚在 listX+318 且宽度 42,
+            // 会画出 320 边界与歌词文本重叠)
+            val timeText = Widgets.formatTime(line.timeMs)
+            val tw = g.textWidth(timeText).toInt()
+            g.drawText(timeText, listX + textMaxW - tw, y + 5, 8f, 1f, YaclTheme.colorTextFaint)
             y += rowH
             idx++
         }
@@ -128,7 +141,8 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        if (lines.isEmpty()) return true
+        // 无歌词时不吞滚轮事件(页面无可滚动内容,交给上级处理)
+        if (lines.isEmpty()) return false
         autoFollow = false
         scroll = (scroll - dy.toInt()).coerceAtLeast(0)
         return true

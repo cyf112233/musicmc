@@ -36,6 +36,11 @@ object RowCoverCache {
     /** 缓存上限(纹理数):长列表滚动时淘汰最旧,防显存 / 句柄膨胀 */
     private const val MAX_TEXTURES = 128
 
+    /** 失败冷却(ms):失败 url 在冷却期内不重试(防坏 url 反复重试刷队列);
+     *  到期后允许重试 —— 网络临时故障恢复后封面能重新加载(永久黑名单会让
+     *  一次网络抖动导致封面永远不显示) */
+    private const val FAILED_COOLDOWN_MS = 5 * 60_000L
+
     /** 已注册纹理:key → AbstractTexture(仅渲染回调线程访问) */
     private val textures = HashMap<String, AbstractTexture>()
 
@@ -48,8 +53,8 @@ object RowCoverCache {
     /** 后台解码完成、等待渲染回调创建纹理:key → 缩略 NativeImage */
     private val readyQueue = ConcurrentLinkedQueue<Pair<String, NativeImage>>()
 
-    /** 失败计数(防同一坏 url 反复重试刷队列;仅后台线程写) */
-    private val failed = ConcurrentHashMap.newKeySet<String>()
+    /** 失败冷却:key → 上次失败时间戳(后台线程写,渲染线程读) */
+    private val failed = ConcurrentHashMap<String, Long>()
 
     private val mc: Minecraft get() = Minecraft.getInstance()
     private val textureManager: TextureManager get() = mc.textureManager
@@ -92,12 +97,15 @@ object RowCoverCache {
 
     /**
      * 确保某 url 的封面开始后台加载(幂等;渲染回调线程调用)。
-     * 已缓存 / 加载中 / 已失败 直接返回。
+     * 已缓存 / 加载中 / 失败冷却期内 直接返回。
      */
     fun request(url: String?) {
         if (url.isNullOrBlank()) return
         val key = keyFor(url)
-        if (key in textures || key in pending || key in failed) return
+        if (key in textures || key in pending) return
+        // 失败冷却:冷却期内不重试,到期(网络恢复)重新尝试
+        val failAt = failed[key]
+        if (failAt != null && System.currentTimeMillis() - failAt < FAILED_COOLDOWN_MS) return
         if (!pending.add(key)) return
         Async.run { loadInBackground(key, url) }
     }
@@ -123,7 +131,7 @@ object RowCoverCache {
             val thumb = cropSquare(img)
             readyQueue.add(key to thumb)
         } catch (e: Exception) {
-            failed.add(key)
+            failed[key] = System.currentTimeMillis()
             pending.remove(key)
             logWarn("封面加载失败:${e.javaClass.simpleName}: ${e.message} url=${url.take(80)}")
         }

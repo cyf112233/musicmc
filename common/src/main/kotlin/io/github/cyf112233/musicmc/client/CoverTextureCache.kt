@@ -73,12 +73,6 @@ object CoverTextureCache {
     /** 封面缓存 key:url(空 url 用 "none",即无封面) */
     fun keyFor(url: String?): String = url ?: "none"
 
-    /** 当前纹理(未就绪返回 null,渲染层画占位块) */
-    fun currentTexture(): AbstractTexture? {
-        val key = currentKey ?: return null
-        return textures[key]
-    }
-
     /** 当前纹理对应的 Identifier(纹理未注册返回 null) */
     fun currentIdentifier(): Identifier? {
         val key = currentKey ?: return null

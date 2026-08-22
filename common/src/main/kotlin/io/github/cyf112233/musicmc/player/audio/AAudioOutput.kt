@@ -51,7 +51,7 @@ class AAudioOutput(private val rate: Int, private val channels: Int) : AudioOutp
             throw IOException(UiText.t("AAudio 音频写入失败", "AAudio write failed"))
         }
         active = true
-        AAudioPlayer.nativeSetVolume(targetVolume)
+        // 音量已由 ensureInited/setVolume 下发,不在每次 write 重复调 JNI(高频路径)
     }
 
     /** 首次写数据时(播放线程)打开 AAudioStream */

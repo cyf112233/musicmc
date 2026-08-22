@@ -75,7 +75,7 @@ class YaclFavDetailScreen(
             return
         }
         if (error != null && songs.isEmpty()) {
-            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, UiText.t("加载失败: $error", "Failed: $error"), w / 2 - 100, h / 2 - 16, 11f, 200, YaclTheme.colorError)
             return
         }
         if (songs.isEmpty()) {
@@ -119,7 +119,10 @@ RowCoverCache.pump()
             val rowH = 24
             val listX = 12
             val listW = width - 24
-            if (x >= listX && x < listX + listW && y >= 40) {
+            // 行映射上界与绘制一致(绘制止于 h-32 给"加载更多"留位):
+            // 不加 y < height - 32 上界,allLoaded 后点击列表底部空白区会映射到
+            // 屏幕外行(视觉上"点了没反应但吞了事件")
+            if (x >= listX && x < listX + listW && y >= 40 && y < height - 32) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in songs.indices) {
                     player.play(songs[row], songs.toList(), row)

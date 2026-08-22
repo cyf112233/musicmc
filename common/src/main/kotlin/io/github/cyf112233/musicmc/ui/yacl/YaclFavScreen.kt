@@ -6,6 +6,7 @@ import io.github.cyf112233.musicmc.bilibili.FavFolder
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.UiText
+import io.github.cyf112233.musicmc.util.Async
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
@@ -17,10 +18,13 @@ import net.minecraft.network.chat.Component
  */
 class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.t("收藏", "Favorites"))) {
 
-
     private var folders: List<FavFolder>? = null
     private var error: String? = null
     private var scroll = 0
+
+    /** B 站昵称(@Volatile:后台线程取回,渲染线程只读 —— 不能在渲染线程阻塞网络) */
+    @Volatile
+    private var nickname: String? = null
 
     private val rectBackBtn = YaclTheme.Rect(0, 0, 0, 0)
     private val rectLoginBtn = YaclTheme.Rect(0, 0, 0, 0)
@@ -29,6 +33,12 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
     override fun init() {
         super.init()
         if (NetMusic.bilibiliLoggedIn() && folders == null && error == null) load()
+        // 昵称(有 nav 5 分钟缓存,未命中时是阻塞网络请求)放后台线程取,
+        // 避免首次打开收藏页卡住渲染线程
+        Async.run {
+            val nick = NetMusic.bilibiliNickname()
+            Async.onUi { nickname = nick }
+        }
     }
 
     private fun load() {
@@ -57,8 +67,8 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
             return
         }
 
-        val nick = NetMusic.bilibiliNickname()
-        if (nick != null) YaclTheme.drawTextClipped(g, "Logged in as: $nick", w / 2 + 40, 12, 9f, w / 2 - 60, 0xFF88AA88.toInt())
+        val nick = nickname
+        if (nick != null) YaclTheme.drawTextClipped(g, UiText.t("已登录: $nick", "Logged in as: $nick"), w / 2 + 40, 12, 9f, w / 2 - 60, YaclTheme.colorAccentBright)
 
         val list = folders
         if (list == null && error == null) {
@@ -66,7 +76,7 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
             return
         }
         if (error != null) {
-            YaclTheme.drawTextClipped(g, "Failed: $error", w / 2 - 100, w / 2 - 16, 11f, 200, YaclTheme.colorError)
+            YaclTheme.drawTextClipped(g, UiText.t("加载失败: $error", "Failed: $error"), w / 2 - 100, h / 2 - 16, 11f, 200, YaclTheme.colorError)
             rectRefreshBtn.x1 = w / 2 - 40; rectRefreshBtn.y1 = h / 2 + 2
             rectRefreshBtn.x2 = w / 2 + 40; rectRefreshBtn.y2 = h / 2 + 26
             YaclTheme.drawBtn(g, rectRefreshBtn, UiText.t("重试", "Retry"), mouseX, mouseY)
@@ -102,7 +112,9 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
         if (list.isNotEmpty()) {
             val rowH = 24
             val listX = 12
-            if (x >= listX && x < listX + 360 && y >= 40) {
+            val listW = width - 24
+            // 命中区与绘制同宽(旧代码硬编码 x < listX + 360,宽屏下后半行可点无响应)
+            if (x >= listX && x < listX + listW && y >= 40) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
                     McScreens.open(YaclFavDetailScreen(list[row], this))

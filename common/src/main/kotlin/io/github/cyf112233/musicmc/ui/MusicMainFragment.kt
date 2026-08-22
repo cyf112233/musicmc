@@ -321,7 +321,7 @@ class MusicMainFragment : Fragment() {
         }
         if (containerId == 0) return false
         childFragmentManager.beginTransaction()
-            .replace(containerId, LyricFragment.newInstance())
+            .replace(containerId, LyricFragment.newInstance(containerId))
             .commit()
         return true
     }

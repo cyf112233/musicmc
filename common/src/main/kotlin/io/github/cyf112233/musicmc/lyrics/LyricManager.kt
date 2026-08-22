@@ -70,10 +70,15 @@ object LyricManager {
             try {
                 val key = LyricCache.keyFor(song)
 
-                // 1) 本地缓存
+                // 1) 本地缓存(校验解析出的歌词行非空:乱码 / 半写 / 无时间戳文本会被
+                //    parseLrc 解析为空列表,此时不命中缓存,继续走 Hub/CC/自动匹配降级链,
+                //    避免"永久空歌词"且不再尝试任何来源)
                 LyricCache.load(key)?.let { cached ->
-                    cb(LyricResult(cached.lines(), cached.userOffsetSec, UiText.t("本地缓存", "Local cache")), null)
-                    return@execute
+                    val cachedLines = cached.lines()
+                    if (cachedLines.isNotEmpty()) {
+                        cb(LyricResult(cachedLines, cached.userOffsetSec, UiText.t("本地缓存", "Local cache")), null)
+                        return@execute
+                    }
                 }
 
                 // 2) Hub 同步(未配置 hubUrl 时直接跳过;拉取失败静默)
@@ -137,8 +142,11 @@ object LyricManager {
                 Async.onUi {
                     when {
                         snapshot.isNotEmpty() -> cb(snapshot, null)
-                        err != null -> cb(emptyList(), err)
+                        // "未找到"优先于来源错误:最后一个来源完成(无论成败)且无任何
+                        // 结果时,提示"未找到相关歌词"而非次要的"搜索失败:xxx" /
+                        // 空回调(空回调会让 UI 无任何提示)
                         last -> cb(emptyList(), UiText.t("未找到相关歌词", "No related lyrics found"))
+                        err != null -> cb(emptyList(), err)
                         else -> cb(emptyList(), null) // 其他来源可能还有结果,不报错
                     }
                 }
@@ -172,20 +180,24 @@ object LyricManager {
     /**
      * 调整偏移(±0.5s 步进):读缓存 → offset+delta → saveOffset 即点即存 →
      * hubUrl 配置了则 fire-and-forget 推送 → UI 线程回调新偏移。
+     * 无缓存时(load 未完成 / 失败)不落盘,回调旧值 —— 避免 UI 显示一个从未
+     * 持久化的偏移,随后任何重载都跳回 0。
      */
     fun adjustOffset(song: Song, deltaSec: Float, cb: (Float) -> Unit) {
         Async.executor.execute {
             val key = LyricCache.keyFor(song)
-            val old = LyricCache.load(key)?.userOffsetSec ?: 0f
-            val newOffset = old + deltaSec
+            val cached = LyricCache.load(key)
+            if (cached == null) {
+                Async.onUi { cb(0f) }
+                return@execute
+            }
+            val newOffset = cached.userOffsetSec + deltaSec
             LyricCache.saveOffset(key, newOffset)
             if (hubEnabled()) {
-                LyricCache.load(key)?.let { cached ->
-                    hubPush(
-                        key,
-                        HubData(cached.id, cached.updateTime, cached.lrc, newOffset, cached.source, System.currentTimeMillis()),
-                    )
-                }
+                hubPush(
+                    key,
+                    HubData(cached.id, cached.updateTime, cached.lrc, newOffset, cached.source, System.currentTimeMillis()),
+                )
             }
             Async.onUi { cb(newOffset) }
         }
@@ -247,7 +259,9 @@ object LyricManager {
 
     /**
      * 自动匹配链路(均在后台线程回调):
-     * 网易云 search(清洗标题)→ 取第一首 fetch → 空则 QQ(duration±3s 匹配)→ 空则酷狗(同样匹配)。
+     * 网易云 search(清洗标题)→ 取第一首(**与 QQ/酷狗一致套用 duration±3s 过滤**,
+     * 避免首位是翻唱/串烧/同名曲时误命中并固化缓存)→ fetch → 空则
+     * QQ(duration±3s 匹配)→ 空则酷狗(同样匹配)。
      */
     private fun autoMatch(song: Song, key: String, cb: (LyricResult, String?) -> Unit) {
         val keyword = TitleLyricLookup.cleanTitle(song.title)
@@ -256,7 +270,7 @@ object LyricManager {
             return
         }
         LyricProviders.search(LyricProviders.NETEASE, keyword) { candidates, _ ->
-            val first = candidates.firstOrNull()
+            val first = matchDuration(candidates, song.durationMs)
             if (first == null) {
                 tryQq(song, key, keyword, cb)
                 return@search

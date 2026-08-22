@@ -1,8 +1,5 @@
 // MusicMC Fabric 平台实现。
-//
-// TODO: MusicLogger 接口形状以 common 模块契约为准(common 尚在编写中),
-// 此处按常见形状实现(info/warn/error/debug + 带 Throwable 的重载),
-// 若与 common 契约不一致,构建代理校验后修正。
+// 实现 common 契约 ModPlatform:配置目录 / 日志 / 屏幕分派(ModernUI / YACL)。
 package io.github.cyf112233.musicmc.fabric
 
 import io.github.cyf112233.musicmc.platform.ModPlatform
@@ -12,7 +9,6 @@ import io.github.cyf112233.musicmc.ui.MusicMainFragment
 import icyllis.modernui.mc.MuiModApi
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
-import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 

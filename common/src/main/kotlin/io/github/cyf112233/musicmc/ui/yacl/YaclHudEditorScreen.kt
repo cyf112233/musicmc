@@ -43,6 +43,11 @@ class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "
         // 半透明遮罩(保留游戏画面可见性,预览 HUD 效果)
         g.fill(0, 0, w, h, 0x90000000.toInt())
 
+        // 封面纹理注册驱动:本屏幕也要消费 CoverTextureCache 的就绪队列(后台线程
+        // 解码完成、待渲染线程建纹理),否则打开编辑器时封面若尚未就绪则永远只显示
+        // 占位块(与 YaclMusicScreen.extractRenderState 的 pump 调用保持一致)
+        CoverTextureCache.pump()
+
         // HUD 面板预览(尺寸随缩放)
         val panelW = (190 * scale).toInt()
         val panelH = (64 * scale).toInt()
@@ -97,7 +102,10 @@ class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "
         if (fillW > 0) g.fill(px + 4, barY, px + 4 + fillW, barY + barH, YaclTheme.colorAccent)
 
         // 顶部提示 + 缩放显示(长文本按屏宽截断,不溢出屏幕)
-        val hint = "Drag to move · Scroll to scale · Pos: ${(curX * 100).toInt()}%,${(curY * 100).toInt()}% · Scale: ${(scale * 100).toInt()}%"
+        val hint = UiText.t(
+            "拖动移动 · 滚轮缩放 · 位置: ${(curX * 100).toInt()}%,${(curY * 100).toInt()}% · 缩放: ${(scale * 100).toInt()}%",
+            "Drag to move · Scroll to scale · Pos: ${(curX * 100).toInt()}%,${(curY * 100).toInt()}% · Scale: ${(scale * 100).toInt()}%",
+        )
         YaclTheme.drawTextClipped(g, hint, 12, 10, 11f, w - 24, YaclTheme.colorTextSub)
 
         // 按钮:重置 / 完成

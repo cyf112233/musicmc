@@ -253,9 +253,22 @@ object ImageDecoder {
             swsCtx?.let { runCatching { swscale.sws_freeContext(it) } }
             runCatching { avformat.avformat_close_input(fmt) }
             val av = avio
-            if (av != null && !av.isNull) runCatching { avformat.avio_context_free(av) }
-            val buf = avioBuffer
-            if (buf != null && !buf.isNull) runCatching { avutil.av_free(buf) }
+            if (av != null && !av.isNull) {
+                // 关键(镜像 FfmpegDecoder.closeNative 的加固):FFmpeg 在探测/读取过程中
+                // 可能内部 realloc 替换 AVIO buffer —— 最初 av_malloc 的原始块(avioBuffer)
+                // 可能已被 ffio_realloc_buf 内部 av_free,这里必须释放**当前存活**的
+                // av.buffer(),否则原始块被二次 free(堆损坏/随机崩溃)而新块永久泄漏。
+                val cur = av.buffer()
+                runCatching { avformat.avio_context_free(av) }
+                runCatching { av.deallocate(false) }
+                if (cur != null && !cur.isNull) {
+                    runCatching { avutil.av_free(cur) }
+                    runCatching { cur.deallocate(false) }
+                }
+            }
+            // 原始 av_malloc 块仅断 GC 队列(不执行 deallocator,防二次 free);
+            // 若未被 realloc 替换则它 == av.buffer(),上面已释放
+            runCatching { avioBuffer?.deallocate(false) }
             runCatching { avcodec.av_packet_free(packet) }
             runCatching { avutil.av_frame_free(frame) }
             runCatching { outBuf?.deallocate() }

@@ -42,7 +42,10 @@ object YaclConfigScreen {
             else -> UiModeOption.AUTO
         }
         var volume = cfg.volume
-        var bitrate = cfg.bitrate
+        // 码率在 UI 层按 kbps 展示(配置存 bps:如 320000;滑块 range 96..320 是 kbps 语义)。
+        // 不做换算的话 binding 读写同一个 bps 值,滑块首显 320000(超出 range)且保存后
+        // 配置被改写成 320 —— 缓存 key(歌曲id_码率)变化导致已缓存歌曲重新下载
+        var bitrateKbps = cfg.bitrate / 1000
         var playMode = cfg.playMode
         var lyricsEnabled = cfg.lyricsEnabled
         var hudLyricEnabled = cfg.hudLyricEnabled
@@ -53,11 +56,14 @@ object YaclConfigScreen {
         var nativeOverride = cfg.nativePlatformOverride
         var nativeCacheDir = cfg.nativeCacheDir
 
-        fun boolOption(name: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit): Option<Boolean> =
+        fun boolOption(name: String, desc: String, default: Boolean, get: () -> Boolean, set: (Boolean) -> Unit): Option<Boolean> =
             Option.createBuilder<Boolean>()
                 .name(Component.literal(name))
                 .description { OptionDescription.of(Component.literal(desc)) }
-                .binding(true, get, set)
+                // 默认值从配置当前值取,而非硬编码 true:
+                // YACL 用 binding 默认值驱动"与默认不同"标记 / 重置按钮,
+                // 硬编码默认会让未改动项误亮重置态
+                .binding(default, get, set)
                 .controller { BooleanControllerBuilder.create(it).coloured(true).yesNoFormatter() }
                 .build()
 
@@ -124,7 +130,7 @@ object YaclConfigScreen {
                 Option.createBuilder<Int>()
                     .name(Component.literal(UiText.t("音质码率", "Audio Bitrate")))
                     .description { OptionDescription.of(Component.literal(UiText.t("请求的音频码率(kbps),越高音质越好但更耗流量", "Requested audio bitrate (kbps). Higher = better quality but more data"))) }
-                    .binding(320, { bitrate }, { bitrate = it })
+                    .binding(320, { bitrateKbps }, { bitrateKbps = it })
                     .controller {
                         IntegerSliderControllerBuilder.create(it)
                             .range(96, 320)
@@ -161,10 +167,10 @@ object YaclConfigScreen {
 
         val categoryLyrics = ConfigCategory.createBuilder()
             .name(Component.literal(UiText.t("歌词", "Lyrics")))
-            .option(boolOption(UiText.t("显示歌词", "Show Lyrics"), UiText.t("播放时显示当前歌曲歌词", "Show lyrics while playing"), { lyricsEnabled }, { lyricsEnabled = it }))
-            .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), { hudLyricEnabled }, { hudLyricEnabled = it }))
-            .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), { chatLyricEnabled }, { chatLyricEnabled = it }))
-            .option(boolOption(UiText.t("标题自动匹配歌词", "Title Fallback"), UiText.t("无 CC 字幕时按歌曲标题在网易云/QQ音乐/酷狗自动匹配歌词", "When no CC subtitles, auto-match lyrics by title from NetEase/QQ Music/Kugou"), { lyricTitleFallback }, { lyricTitleFallback = it }))
+            .option(boolOption(UiText.t("显示歌词", "Show Lyrics"), UiText.t("播放时显示当前歌曲歌词", "Show lyrics while playing"), cfg.lyricsEnabled, { lyricsEnabled }, { lyricsEnabled = it }))
+            .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), cfg.hudLyricEnabled, { hudLyricEnabled }, { hudLyricEnabled = it }))
+            .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), cfg.chatLyricEnabled, { chatLyricEnabled }, { chatLyricEnabled = it }))
+            .option(boolOption(UiText.t("标题自动匹配歌词", "Title Fallback"), UiText.t("无 CC 字幕时按歌曲标题在网易云/QQ音乐/酷狗自动匹配歌词", "When no CC subtitles, auto-match lyrics by title from NetEase/QQ Music/Kugou"), cfg.lyricTitleFallback, { lyricTitleFallback }, { lyricTitleFallback = it }))
             .option(
                 Option.createBuilder<String>()
                     .name(Component.literal(UiText.t("歌词 Hub 地址", "Lyrics Hub URL")))
@@ -183,7 +189,7 @@ object YaclConfigScreen {
 
         val categoryHud = ConfigCategory.createBuilder()
             .name(Component.literal(UiText.t("HUD", "HUD")))
-            .option(boolOption(UiText.t("悬浮播放面板", "HUD Panel"), UiText.t("游戏内显示音乐 HUD(封面/歌名/进度)", "Show the in-game music HUD (cover / title / progress)"), { hudEnabled }, { hudEnabled = it }))
+            .option(boolOption(UiText.t("悬浮播放面板", "HUD Panel"), UiText.t("游戏内显示音乐 HUD(封面/歌名/进度)", "Show the in-game music HUD (cover / title / progress)"), cfg.hudEnabled, { hudEnabled }, { hudEnabled = it }))
             .option(
                 ButtonOption.createBuilder()
                     .name(Component.literal(UiText.t("打开 HUD 编辑器", "Open HUD Editor")))
@@ -241,7 +247,7 @@ object YaclConfigScreen {
                     old.copy(
                         uiMode = uiMode.value,
                         volume = volume.coerceIn(0f, 1f),
-                        bitrate = bitrate,
+                        bitrate = bitrateKbps * 1000,
                         playMode = playMode,
                         lyricsEnabled = lyricsEnabled,
                         hudLyricEnabled = hudLyricEnabled,
