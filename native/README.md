@@ -153,12 +153,11 @@ DSL 要点(两个 build.gradle.kts 均已实现,注释已注明):
 
 ## GitHub Actions CI(native 六平台矩阵)
 
-仓库已配两个工作流(均在 ubuntu-latest、temurin JDK 25 上运行):
+仓库配**单个工作流** `.github/workflows/build.yml`(ubuntu-latest、temurin JDK 25):
 
-| 工作流 | 触发 | 内容 |
-|---|---|---|
-| `.github/workflows/native-build.yml` | workflow_dispatch / push(限 `native/**` 与自身文件) | `native` job 六平台矩阵并行(`linux-x86_64 / linux-arm64 / windows-x86_64 / windows-arm64 / android-arm64 / android-x86_64`):`bash native/build.sh <platform>` 两阶段构建 → 打平台 jar → artifact `musicmc-native-<platform>`;`assemble-all` job 下载 6 个 jar + `native/toolbox/` 的 javacpp-windows-arm64.jar 到 `native/build/libs/` → `-PnativePlatform=all` 打全平台 mod jar(artifact `mod-fabric-all` / `mod-neoforge-all`) |
-| `.github/workflows/build-mod.yml` | workflow_dispatch(`nativePlatform`: linux-x86_64 / all;`native_run_id` 可选) | 手动打 mod jar;all 模式填 `native_run_id`(指向一次成功的 native-build run)下载 6 个平台 jar,第 7 个 jar 由 `native/toolbox/` 补,缺文件在 Gradle 前显式报错 |
+| 触发 | 内容 |
+|---|---|
+| `workflow_dispatch` / push(排除 `README.md`、`docs/**`) | `native` job 六平台矩阵并行(`linux-x86_64 / linux-arm64 / windows-x86_64 / windows-arm64 / android-arm64 / android-x86_64`):`bash native/build.sh <platform>` 两阶段构建 → 打平台 jar → artifact `musicmc-native-<platform>`;`assemble` job 下载 6 个 jar + `native/toolbox/` 的 javacpp-windows-arm64.jar 到 `native/build/libs/` → `-PnativePlatform=all` 打全平台 mod jar(artifact `mod-fabric-all` / `mod-neoforge-all`);`release` job 把 2 个 mod jar 上传为 GitHub Release(`build-<run_number>`) |
 
 缓存键(actions/cache,跨 run 复用;命中即免下载工具链 / 免重编 ffmpeg):
 

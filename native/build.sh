@@ -20,6 +20,11 @@
 set -eu
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"        # <native>/
+if [[ $# -lt 1 || -z "$1" ]]; then
+    echo "Usage: bash build.sh <platform> [--skip-build]" >&2
+    echo "  <platform>   linux-x86_64 | linux-arm64 | windows-x86_64 | windows-arm64 | android-arm64 | android-x86_64" >&2
+    exit 1
+fi
 CPPBUILD_SH="$ROOT/cppbuild/ffmpeg/cppbuild.sh"
 PREFIX="$ROOT/cppbuild/ffmpeg/cppbuild/$1"
 PLATFORM="$1"
@@ -56,7 +61,16 @@ echo "============================================================"
 echo "  stage 1/2: cppbuild (FFmpeg $PLATFORM)"
 echo "  prefix:    $PREFIX"
 echo "============================================================"
-if [[ "$SKIP_BUILD" == 0 ]] && [[ -f "$PREFIX/.ffmpeg-7.1.5-built" ]] && [[ -f "$PREFIX/lib/libavcodec.so.61" ]]; then
+# 各平台"已构建"判定产物不同:linux 带 SONAME 版本号(lib/libavcodec.so.61);
+# windows DLL 装在 bin/(avcodec-61.dll);android 不带版本号(lib/libavcodec.so)。
+# 修 2026-08:原判定只认 linux 产物,其余平台命中印章也总是重跑阶段 1(虽被
+# cppbuild.sh 自己的印章短路,但日志误导、且多一次 configure 探测)。
+case "$PLATFORM" in
+    windows-*) BUILT_MARKER="$PREFIX/bin/avcodec-61.dll" ;;
+    android-*) BUILT_MARKER="$PREFIX/lib/libavcodec.so" ;;
+    *)         BUILT_MARKER="$PREFIX/lib/libavcodec.so.61" ;;
+esac
+if [[ "$SKIP_BUILD" == 0 ]] && [[ -f "$PREFIX/.ffmpeg-7.1.5-built" ]] && [[ -f "$BUILT_MARKER" ]]; then
     echo "  -- ffmpeg already built ($PREFIX/.ffmpeg-7.1.5-built), skipping stage 1 (use: rm stamp 或 cppbuild --rebuild 以强制重建)"
 else
     bash "$CPPBUILD_SH" install -platform="$PLATFORM" --tarball="$ROOT/ffmpeg/ffmpeg-7.1.5.tar.xz"
