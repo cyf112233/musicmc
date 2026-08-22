@@ -29,8 +29,9 @@
 //   * nativeWrite 在取元素指针前先按 GetArrayLength 做越界校验 —— JNI 越界
 //     读写是未定义行为,防调用方传入非法 off/len 时读到数组外内存;
 //   * 音量 g_volume 改用 __atomic 宽松存取:nativeSetVolume 来自任意线程
-//     (UI 线程)、nativeWrite 在播放线程读,原为裸读写的数据竞争。4 字节类型
-//     在 arm64/x86_64 上编译为普通 ldr/str,无锁、不引入 libatomic 依赖
+//     (UI 线程)、nativeWrite 在播放线程读,原为裸读写的数据竞争。以 int32
+//     位模式存音量(NDK clang 的 __atomic_* 不接受 float*),int32 原子在
+//     arm64/x86_64 上无锁编译为普通 ldr/str,不引入 libatomic 依赖
 //     (android DT_NEEDED 校验保持只有系统库/兄弟库);
 //   * AAudioStream_write 返回短写(written < frames)视为失败 —— 本库对外
 //     语义是"阻塞写入全量帧"(同 SourceDataLine),不再静默丢帧返回成功。
@@ -39,22 +40,28 @@
 #include <android/log.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <string.h>
 
 #define LOG_TAG "MusicMCAudio"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static AAudioStream *g_stream = NULL;
-static float g_volume = 1.0f;
 /* 当前流的 owner token:由 Java 侧每次会话生成;release 必须匹配才关闭 */
 static int64_t g_owner = 0;
 /* 读写锁:write/stop 读锁并发,release/init 写锁独占(见文件头注释) */
 static pthread_rwlock_t g_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 /* 音量:setVolume(任意线程)与 write(播放线程)并发,用 __atomic 宽松存取。
- * 4 字节类型在 arm64/x86_64 上无锁编译为普通 ldr/str,不引入 libatomic。 */
-#define VOLUME_LOAD()   __atomic_load_n(&g_volume, __ATOMIC_RELAXED)
-#define VOLUME_STORE(v) __atomic_store_n(&g_volume, (v), __ATOMIC_RELAXED)
+ * NDK clang 的 __atomic_* 只接受整型/指针参数(不接受 float*),故音量以
+ * int32 位模式存储(float<->int32 用 memcpy 位转换,编译为普通 mov);
+ * int32 原子在 arm64/x86_64 上必定无锁,不引入 libatomic 依赖。 */
+static int32_t g_volume_bits = 0x3F800000;   /* 1.0f 的 IEEE-754 位模式 */
+
+static inline float float_from_bits(int32_t b) { float f; memcpy(&f, &b, sizeof f); return f; }
+static inline int32_t float_to_bits(float f)   { int32_t b; memcpy(&b, &f, sizeof b); return b; }
+#define VOLUME_LOAD()   float_from_bits(__atomic_load_n(&g_volume_bits, __ATOMIC_RELAXED))
+#define VOLUME_STORE(v) __atomic_store_n(&g_volume_bits, float_to_bits(v), __ATOMIC_RELAXED)
 
 JNIEXPORT jint JNICALL
 Java_io_github_cyf112233_musicmc_player_audio_AAudioPlayer_nativeInit(
