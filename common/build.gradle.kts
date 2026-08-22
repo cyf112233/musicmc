@@ -10,25 +10,27 @@ repositories {
     maven("https://maven.izzel.io/releases/")
     // Mojang 官方构件仓库(joml 等 MC 运行时依赖在此解析;
     // 注:com.mojang:minecraft:${minecraft_version}-client 该坐标实测 404,
-    // 见下方 fabric-loom 本地仓库说明)
+    // 见 mc26.1 模块的 fabric-loom 本地仓库说明)
     maven("https://libraries.minecraft.net")
     // fabric-loom 生成的 Minecraft 反混淆构件(仅独立编译用;实际随 loader 模块编译):
     // `minecraft("com.mojang:minecraft:...")` 由 Loom 下载并发布到本地
     // ~/.gradle/caches/fabric-loom/minecraftMaven,坐标 net.minecraft:minecraft-merged-deobf。
-    // 官方 libraries.minecraft.net 不提供 client jar 的 maven 坐标(实测 404),故借用本地缓存。
     maven {
         url = uri("${System.getProperty("user.home")}/.gradle/caches/fabric-loom/minecraftMaven")
     }
 }
 
 dependencies {
-    // ModernUI 仅作为编译期 API 参考,运行期由 fabric / neoforge 侧提供,故 compileOnly
+    // ModernUI 仅作为编译期 API 参考,运行期由 fabric / neoforge 侧提供,故 compileOnly。
+    // ModernUI Fragments(MusicMainFragment 等)留在 common(依赖 icyllis 而非 net.minecraft)。
     compileOnly("icyllis.modernui:ModernUI-NeoForge:${property("modernui_mc_version")}")
     compileOnly("dev.icyllis:modernui-core:${property("modernui_core_version")}")
     compileOnly("icyllis.modernui:ModernUI-Markflow:${property("markflow_version")}")
 
-    // Minecraft 客户端(仅独立编译用;实际随 loader 模块编译,由 Loom / MDG 提供)。
-    // 含迁入的 MusicHudRenderer / CoverTextureCache 所需的 net.minecraft import。
+    // 注:net.minecraft / com.mojang 重度依赖类已迁入 mc26.1 模块(本 common 仅保留
+    // 纯逻辑 + ModernUI Fragments + UiText,UiText 的语言判断经 ModPlatform.isChinese()
+    // 委托 loader 侧,不再直接引用 Minecraft)。以下 MC 编译依赖仅供本模块独立编译
+    // 时解析 joml/lwjgl(部分残留 import);实际随 loader 模块编译由 Loom / MDG 提供。
     compileOnly("net.minecraft:minecraft-merged-deobf:${property("minecraft_version")}")
     // MC 运行时依赖(版本取自 MC 26.1.2 piston-meta libraries:org.joml:joml:1.10.8)
     compileOnly("org.joml:joml:1.10.8")
@@ -36,9 +38,6 @@ dependencies {
     // API 在 3.3.x/3.4.x 稳定一致,版本与 MC 运行期实际值无强绑定)
     compileOnly("org.lwjgl:lwjgl:3.4.2")
     compileOnly("org.lwjgl:lwjgl-openal:3.4.2")
-    // YACL 现代化 UI(Android / 无 ModernUI 时的第二 UI 后端;双平台 fabric+neoforge)。
-    // 编译用 fabric 构件(gui 核心类双平台一致;运行期由用户安装对应平台 YACL mod 提供)
-    compileOnly(files("libs/yacl-3.9.6-26.1.jar"))
 
     // 运行期依赖
     implementation("com.google.code.gson:gson:${property("gson_version")}")

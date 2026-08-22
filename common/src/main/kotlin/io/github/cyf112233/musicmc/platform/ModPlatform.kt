@@ -12,7 +12,8 @@ interface MusicLogger {
 }
 
 /**
- * loader 侧注入的平台能力契约。common 模块不依赖任何 net.minecraft / com.mojang 类。
+ * loader 侧注入的平台能力契约。common 模块不依赖任何 net.minecraft / com.mojang 类
+ * (游戏语言判断经 [isChinese] 由 loader 侧实现,见 UiText)。
  */
 interface ModPlatform {
     /** 配置文件目录(如 config/musicmc) */
@@ -30,6 +31,12 @@ interface ModPlatform {
     fun postToUiThread(runnable: Runnable)
     /** ModernUI 模组是否加载(loader 侧查 mod 列表;openMusicScreen 分派用) */
     fun isModernUiLoaded(): Boolean
+    /**
+     * 游戏语言是否为中文(界面文案 i18n 用;loader 侧读
+     * Minecraft.getInstance().options.languageCode)。
+     * 加载期 / 非客户端环境取不到时返回 false(英文兜底),实现方须自行 try/catch。
+     */
+    fun isChinese(): Boolean
 }
 
 object PlatformHolder {

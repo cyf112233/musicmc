@@ -122,14 +122,17 @@ base {
     archivesName = "$archivesBaseName-neoforge"
 }
 
-// 共享 common 模块的源码:仅并入源目录(common 源码直接编译进本模块 jar,
+// 共享 common + mc26.1 模块的源码:仅并入源目录(common/mc26.1 源码直接编译进本模块 jar,
 // 不再作为 project 依赖,否则类会重复打包)。common 模块自身需应用 kotlin 插件,
-// 其 sourceSets.main.kotlin 才存在。
+// 其 sourceSets.main.kotlin 才存在;mc26.1 同理承载 net.minecraft/com.mojang 重度依赖类。
 sourceSets {
     main {
         val commonMain = project(":common").sourceSets.main.get()
         kotlin.srcDir(commonMain.kotlin.srcDirs)
         java.srcDir(commonMain.java.srcDirs)
+        val mcMain = project(":mc26.1").sourceSets.main.get()
+        kotlin.srcDir(mcMain.kotlin.srcDirs)
+        java.srcDir(mcMain.java.srcDirs)
     }
 }
 

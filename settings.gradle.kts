@@ -21,6 +21,10 @@ plugins {
 rootProject.name = "musicmc"
 
 include("common")
+// MC 版本适配层:mc26.1(当前构建,重依赖 net.minecraft/com.mojang 的类;
+// 反射桥运行期兼容 26.1/26.2);mc26.2(26.2 专项适配预留,当前不参与构建,见其 build.gradle.kts)
+include("mc26.1")
+include("mc26.2")
 include("fabric")
 include("neoforge")
 // FFmpeg 原生构建模块(不参与 common/fabric/neoforge 编译,只承载原生构建与打包任务)

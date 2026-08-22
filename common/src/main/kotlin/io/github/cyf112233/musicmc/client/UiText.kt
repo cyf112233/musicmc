@@ -1,6 +1,6 @@
 package io.github.cyf112233.musicmc.client
 
-import net.minecraft.client.Minecraft
+import io.github.cyf112233.musicmc.platform.PlatformHolder
 
 /**
  * 界面文本 i18n 辅助:按当前游戏语言返回中文或英文。
@@ -8,11 +8,11 @@ import net.minecraft.client.Minecraft
  * 设计:
  * - [t](中文, 英文) 返回当前语言对应的文案;游戏语言为中文(zh_cn / zh_tw /
  *   zh_hk 等语言代码含 "zh")时返回中文,否则返回英文(默认 en_us)。
- * - 语言代码读自 `Minecraft.getInstance().options.languageCode`(26.1 / 26.2
- *   均有该字段,javap 核实)。
- * - **加载期安全**:YACL 界面类在平台模块(fabric/neoforge)加载,`Minecraft
- *   .getInstance()` 在游戏启动早期可能抛 IllegalStateException —— 全部经
- *   runCatching 兜底,取不到语言时按英文处理,绝不因 i18n 导致启动崩溃。
+ * - 语言判断经 [PlatformHolder.require().isChinese] 委托 loader(fabric/neoforge)
+ *   侧实现 —— common 模块不直接依赖 net.minecraft(MC 版本差异隔离在平台层)。
+ * - **加载期安全**:loader 侧 isChinese 读 Minecraft 语言时可能抛
+ *   IllegalStateException(游戏启动早期),平台实现负责 try/catch 兜底;
+ *   本对象再次 runCatching,取不到语言时按英文处理,绝不因 i18n 导致启动崩溃。
  * - **缓存**:检测结果缓存 [CACHE_TTL_MS] 毫秒(默认 30s),渲染回调每帧调用
  *   [t] 也不会反复访问 Minecraft;切语言后最多 30s 内界面文案跟随(重启即
  *   立即生效)。[invalidateCache] 供需要立即刷新的场景调用。
@@ -48,8 +48,7 @@ object UiText {
     /** 实际检测(带兜底:任何异常按英文处理,保证加载期 / 非客户端环境不崩) */
     private fun detectChinese(): Boolean {
         return runCatching {
-            val code = Minecraft.getInstance().options.languageCode
-            !code.isNullOrBlank() && code.lowercase().startsWith("zh")
+            PlatformHolder.require().isChinese()
         }.getOrDefault(false)
     }
 

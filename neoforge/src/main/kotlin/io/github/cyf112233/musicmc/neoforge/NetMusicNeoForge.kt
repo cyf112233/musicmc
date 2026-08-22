@@ -153,6 +153,11 @@ private class NeoForgePlatform : ModPlatform {
 
     override fun isModernUiLoaded(): Boolean = ModList.get().isLoaded("modernui")
 
+    override fun isChinese(): Boolean = runCatching {
+        val code = Minecraft.getInstance().options.languageCode
+        !code.isNullOrBlank() && code.lowercase().startsWith("zh")
+    }.getOrDefault(false)
+
 
     override fun openConfigScreen() {
         io.github.cyf112233.musicmc.ui.yacl.YaclConfigScreen.open(io.github.cyf112233.musicmc.platform.McScreens.current())
