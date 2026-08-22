@@ -168,21 +168,13 @@ dependencies {
     compileOnly(files("../common/libs/modmenu-18.0.0.jar"))
 }
 
-// 共享 common + mc26.1 模块的源码(common 的源码与 Kotlin/Java 插件由 common 模块代理提供;
-// mc26.1 承载 net.minecraft/com.mojang 重度依赖类。此处仅把两者的 main sourceSet 源目录
-// 并入本模块的 main sourceSet,产物仍是单 jar)。
-// 注意:跨项目访问 project(":mc26.1").sourceSets 要求 mc26.1 已先配置(kotlin 插件应用后
-// sourceSets 扩展才存在)—— Gradle 默认按 settings 顺序配置,本项目 mc26.1 在 fabric 之前
-// 已配置,但显式 evaluationDependsOn 保险(防止未来调整 include 顺序时再次踩坑)。
-evaluationDependsOn(":mc26.1")
+// 共享 common 模块的源码(common 的源码与 Kotlin/Java 插件由 common 模块代理提供,
+// 此处仅把其 main sourceSet 的源目录并入本模块的 main sourceSet)。
 sourceSets {
     main {
         val commonMain = project(":common").sourceSets.main.get()
         kotlin.srcDir(commonMain.kotlin.srcDirs)
         java.srcDir(commonMain.java.srcDirs)
-        val mcMain = project(":mc26.1").sourceSets.main.get()
-        kotlin.srcDir(mcMain.kotlin.srcDirs)
-        java.srcDir(mcMain.java.srcDirs)
     }
 }
 

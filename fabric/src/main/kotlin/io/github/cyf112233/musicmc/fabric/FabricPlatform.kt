@@ -75,9 +75,4 @@ class FabricPlatform : ModPlatform {
 
     override fun isModernUiLoaded(): Boolean = FabricLoader.getInstance().isModLoaded("modernui")
 
-    override fun isChinese(): Boolean = runCatching {
-        val code = Minecraft.getInstance().options.languageCode
-        !code.isNullOrBlank() && code.lowercase().startsWith("zh")
-    }.getOrDefault(false)
-
 }
