@@ -14,6 +14,7 @@ import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.player.PlayMode
 import io.github.cyf112233.musicmc.ui.UiBackend
 import io.github.cyf112233.musicmc.ui.UiBackendResolver
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
@@ -30,6 +31,14 @@ object YaclConfigScreen {
         AUTO(UiText.t("自动(装了哪个用哪个)", "Auto (use whichever is installed)"), "AUTO"),
         MODERN_UI("ModernUI", "MODERN_UI"),
         YACL(UiText.t("YACL 现代化", "YACL (Modern)"), "YACL"),
+    }
+
+    /** 字节数转可读大小(音频缓存占用/清除量展示;与 MUI SettingsFragment 一致) */
+    private fun formatBytes(bytes: Long): String = when {
+        bytes <= 0 -> "0 B"
+        bytes >= 1024 * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024.0)
+        bytes >= 1024 -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
     }
 
     fun open(parent: Screen?): Screen {
@@ -236,11 +245,77 @@ object YaclConfigScreen {
             )
             .build()
 
+        val categoryStorage = ConfigCategory.createBuilder()
+            .name(Component.literal(UiText.t("存储", "Storage")))
+            .option(
+                ButtonOption.createBuilder()
+                    .name(Component.literal(UiText.t("清除音频缓存", "Clear Audio Cache")))
+                    .description {
+                        OptionDescription.of(
+                            Component.literal(
+                                UiText.t(
+                                    "播放过的歌曲缓存于本地(下次离线直播);当前占用: ${formatBytes(io.github.cyf112233.musicmc.player.AudioCache.totalSize())}",
+                                    "Played songs are cached locally for offline playback. Current usage: ${formatBytes(io.github.cyf112233.musicmc.player.AudioCache.totalSize())}",
+                                ),
+                            ),
+                        )
+                    }
+                    .text(Component.literal(UiText.t("清除", "Clear")))
+                    .action { _ ->
+                        val freed = io.github.cyf112233.musicmc.player.AudioCache.clear()
+                        Minecraft.getInstance().gui.getChat().addClientSystemMessage(
+                            Component.literal(
+                                UiText.t("音频缓存已清除(${formatBytes(freed)})", "Audio cache cleared (${formatBytes(freed)})"),
+                            ),
+                        )
+                    }
+                    .build(),
+            )
+            .build()
+
+        val categoryAccount = ConfigCategory.createBuilder()
+            .name(Component.literal(UiText.t("账号", "Account")))
+            .option(
+                ButtonOption.createBuilder()
+                    .name(Component.literal(UiText.t("B 站账号", "Bilibili Account")))
+                    .description {
+                        OptionDescription.of(
+                            Component.literal(
+                                if (NetMusic.bilibiliLoggedIn()) {
+                                    UiText.t("已登录: 扫码登录后搜索个性化、降低风控;退出登录请点右侧按钮", "Logged in. QR login personalizes search & lowers risk control; use the button to log out")
+                                } else {
+                                    UiText.t("扫码登录 B 站(可选):搜索个性化、降低风控、流媒体优先提升", "QR-login to Bilibili (optional): personalized search, lower risk control, stream priority")
+                                },
+                            ),
+                        )
+                    }
+                    .text(
+                        Component.literal(
+                            if (NetMusic.bilibiliLoggedIn()) UiText.t("退出登录", "Log Out") else UiText.t("扫码登录", "QR Login"),
+                        ),
+                    )
+                    .action { _ ->
+                        if (NetMusic.bilibiliLoggedIn()) {
+                            NetMusic.setBilibiliCookie("")
+                            Minecraft.getInstance().gui.getChat().addClientSystemMessage(
+                                Component.literal(UiText.t("已退出登录", "Logged out")),
+                            )
+                        } else {
+                            // 打开扫码登录页(返回本配置屏)
+                            io.github.cyf112233.musicmc.platform.McScreens.open(YaclLoginScreen(io.github.cyf112233.musicmc.platform.McScreens.current()))
+                        }
+                    }
+                    .build(),
+            )
+            .build()
+
         val screen = YetAnotherConfigLib.createBuilder()
             .title(Component.literal(UiText.t("MusicMC 设置", "MusicMC Settings")))
             .category(categoryGeneral)
             .category(categoryLyrics)
             .category(categoryHud)
+            .category(categoryStorage)
+            .category(categoryAccount)
             .category(categoryAdvanced)
             .save {
                 NetMusic.updateConfig { old ->

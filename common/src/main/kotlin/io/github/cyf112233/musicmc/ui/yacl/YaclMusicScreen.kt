@@ -1,6 +1,7 @@
 package io.github.cyf112233.musicmc.ui.yacl
 
 import io.github.cyf112233.musicmc.NetMusic
+import io.github.cyf112233.musicmc.bilibili.BiliActions
 import io.github.cyf112233.musicmc.client.CoverTextureCache
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.UiText
@@ -10,6 +11,7 @@ import io.github.cyf112233.musicmc.ui.Widgets
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 
 /**
@@ -42,6 +44,14 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     private val rectProgress = YaclTheme.Rect(0, 0, 0, 0)
     private val rectVolume = YaclTheme.Rect(0, 0, 0, 0)
 
+    /** 点赞按钮(♥/♡)与收藏按钮(★/☆),放在封面信息区右侧 */
+    private val rectLike = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectFavStar = YaclTheme.Rect(0, 0, 0, 0)
+
+    /** 当前歌曲点赞态(内存缓存;null=未知,点击时后台查询) */
+    @Volatile
+    private var liked: Boolean? = null
+
     private var lastSongId: String? = null
 
     // ---- 进度 / Volume拖动状态(优化拖动逻辑:按下即锁定,可移出条身继续拖) ----
@@ -65,6 +75,11 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             lastSongId = song.id
             dragDurationMs = song.durationMs
             CoverTextureCache.prepare(song.picUrl)
+            // 换歌:重置点赞态并后台刷新(BiliActions 有内存缓存;未登录返回 null)
+            liked = null
+            if (NetMusic.bilibiliLoggedIn()) {
+                BiliActions.refreshLike(song) { v, _ -> liked = v }
+            }
         }
 
         YaclTheme.drawBackground(g, w, h)
@@ -126,7 +141,17 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
                 PlayerState.ERROR -> UiText.t("播放出错", "Playback Error") to YaclTheme.colorError
                 else -> UiText.t("未播放", "Idle") to YaclTheme.colorTextDim
             }
-            g.drawText(stateText, textX, stateY, 12f, 1f, stateColor)
+            // 状态行右侧:点赞 ♥/♡ 与收藏 ★/☆ 按钮(与 MUI 主界面一致)
+            val btnSize = 16
+            val btnY = stateY - 2
+            rectLike.set(textX + maxTextW - 2 * btnSize - 12, btnY, textX + maxTextW - btnSize - 8, btnY + btnSize)
+            rectFavStar.set(textX + maxTextW - btnSize - 4, btnY, textX + maxTextW, btnY + btnSize)
+            val likeOn = liked == true
+            YaclTheme.drawBtn(g, rectLike, if (likeOn) "♥" else "♡", mouseX, mouseY)
+            val faved = BiliActions.favedState(song.id) == true
+            YaclTheme.drawBtn(g, rectFavStar, if (faved) "★" else "☆", mouseX, mouseY)
+            // 状态文字收窄,避免与按钮重叠
+            YaclTheme.drawTextClipped(g, stateText, textX, stateY, 12f, maxTextW - 2 * btnSize - 20, stateColor)
         } else {
             g.drawText(UiText.t("未在播放", "Not Playing"), textX, titleY, 16f, 1f, YaclTheme.colorTextMain)
             g.drawText(UiText.t("点上方「搜索」搜索并播放", "Search above to play"), textX, artistY, 12f, 1f, YaclTheme.colorTextSub)
@@ -205,7 +230,21 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             rectPrev.hit(x, y) -> { player.prev(); return true }
             rectPlay.hit(x, y) -> { player.toggle(); return true }
             rectNext.hit(x, y) -> { player.next(); return true }
-            rectMode.hit(x, y) -> { player.cycleMode(); return true }
+            rectMode.hit(x, y) -> {
+                player.cycleMode()
+                // 播放模式持久化:只 cycleMode 不 saveConfig 的话重启后模式丢失
+                // (对齐 MUI 主界面 modeButton 的 cycleMode + saveConfig 写法)
+                NetMusic.saveConfig()
+                return true
+            }
+            rectLike.hit(x, y) -> {
+                toggleLike()
+                return true
+            }
+            rectFavStar.hit(x, y) -> {
+                openFavPicker()
+                return true
+            }
             rectProgress.hit(x, y) -> {
                 // 按下进度条:锁定拖动态(之后即使移出条身仍继续 seek,直到 mouseReleased)
                 draggingProgress = true
@@ -279,5 +318,27 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val v = ((x - bar.x1) / (bar.x2 - bar.x1)).toFloat().coerceIn(0f, 1f)
         player.setVolume(v)
         NetMusic.updateConfig { it.copy(volume = v) }
+    }
+
+    // ---------------- 点赞 / 收藏(与 MUI 主界面一致) ----------------
+
+    /** 点赞切换(BiliActions 后台执行,回调在 UI 线程;未登录提示) */
+    private fun toggleLike() {
+        val song = player.current ?: return
+        BiliActions.toggleLike(song) { newLiked, err ->
+            liked = newLiked
+            if (err != null) {
+                // 轻提示:聊天栏输出错误(与 ChatLyricSender 同一套 API,已验证可编译)
+                Minecraft.getInstance().gui.getChat().addClientSystemMessage(
+                    Component.literal(err).withColor(0xFFFF5C5C),
+                )
+            }
+        }
+    }
+
+    /** 打开收藏夹选择器(把当前歌曲加入/移出收藏夹,可新建) */
+    private fun openFavPicker() {
+        if (player.current == null) return
+        McScreens.open(YaclFavPickerScreen(this))
     }
 }

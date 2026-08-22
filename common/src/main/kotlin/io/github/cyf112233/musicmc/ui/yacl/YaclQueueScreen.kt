@@ -71,7 +71,12 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal(UiTex
         val x = event.x()
         val y = event.y()
         if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
-        if (rectModeBtn.hit(x, y)) { player.cycleMode(); return true }
+        if (rectModeBtn.hit(x, y)) {
+            player.cycleMode()
+            // 播放模式持久化(对齐 MUI 的 cycleMode + saveConfig 写法)
+            NetMusic.saveConfig()
+            return true
+        }
         if (rectClearBtn.hit(x, y)) { player.clearQueue(); return true }
         val queue = player.queue
         if (queue.isNotEmpty()) {

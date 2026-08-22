@@ -177,10 +177,23 @@ object YaclTheme {
         g.drawText(label, r.x1 + 6, r.y1 + 4, 11f, 1f, textColor)
     }
 
-    /** 居中小标题(按 [sizePx] 字号,以 [centerX] 为水平中心) */
+    /** 居中小标题(按 [sizePx] 字号,以 [centerX] 为水平中心)。
+     *  注意:不裁剪 —— 传入**网络数据**(歌名/歌单名/收藏夹名)时请用
+     *  [drawCenteredClipped],否则长文本会盖住左右相邻控件。 */
     fun drawCenteredTitle(g: GuiGraphicsHudGui, text: String, centerX: Int, y: Int, sizePx: Float = 14f) {
         val tw = (g.textWidth(text).toFloat() * (sizePx / 12f)).toInt()
         g.drawText(text, centerX - tw / 2, y, sizePx, 1f, colorTextMain)
+    }
+
+    /**
+     * 居中且截断的标题绘制:文本超过 [maxWidth] 时截断加省略号,再以 [centerX] 居中。
+     * 用于顶部标题等"短标题居中、长标题不溢出"的场景(歌单名/收藏夹名/错误提示)。
+     */
+    fun drawCenteredClipped(g: GuiGraphicsHudGui, text: String, centerX: Int, y: Int, sizePx: Float, maxWidth: Int, color: Int) {
+        if (maxWidth <= 0) return
+        val t = truncate(g, text, maxWidth, sizePx)
+        val tw = (g.textWidth(t).toFloat() * (sizePx / 12f)).toInt()
+        g.drawText(t, centerX - tw / 2, y, sizePx, 1f, color)
     }
 
     /**

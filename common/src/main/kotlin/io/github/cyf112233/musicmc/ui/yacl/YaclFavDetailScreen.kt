@@ -66,7 +66,9 @@ class YaclFavDetailScreen(
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
         YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
         val title = folder.title.ifBlank { UiText.t("未命名收藏夹", "Unnamed folder") }
-        YaclTheme.drawCenteredTitle(g, title, w / 2, 10)
+        // 收藏夹名居中截断:裸居中 drawText 在长标题下会盖住右侧「播放全部」按钮
+        val titleMaxW = (w - 192).coerceAtLeast(40)
+        YaclTheme.drawCenteredClipped(g, title, w / 2, 10, 14f, titleMaxW, YaclTheme.colorTextMain)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
         YaclTheme.drawBtn(g, rectPlayAllBtn, UiText.t("播放全部", "Play All"), mouseX, mouseY, accent = true)
 

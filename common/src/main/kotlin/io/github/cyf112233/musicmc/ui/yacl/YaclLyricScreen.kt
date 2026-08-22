@@ -4,18 +4,33 @@ import io.github.cyf112233.musicmc.NetMusic
 import io.github.cyf112233.musicmc.platform.McScreens
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.UiText
+import io.github.cyf112233.musicmc.lyrics.LyricCandidate
+import io.github.cyf112233.musicmc.lyrics.LyricManager
+import io.github.cyf112233.musicmc.lyrics.LyricProviders
 import io.github.cyf112233.musicmc.model.LyricLine
 import io.github.cyf112233.musicmc.util.Lrc
 import io.github.cyf112233.musicmc.ui.Widgets
+import io.github.cyf112233.musicmc.ui.hud.HudLyricsCache
 import io.github.cyf112233.musicmc.util.Async
 import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
 
 /**
- * YACL 版Lyrics页:显示当前歌曲Lyrics,当前行高亮,自动跟随播放进度。
+ * YACL 版歌词页:显示当前歌曲歌词,当前行高亮,自动跟随播放进度。
  * 手动滚动后暂停跟随,点「跟随」重新开启;视觉走 YaclTheme。
+ *
+ * 2026-08 补齐与 MUI LyricFragment 对齐的完整歌词管线:
+ * - 加载走 [LyricManager.load](本地缓存 → Hub 同步 → CC 字幕 → 标题自动匹配三源),
+ *   不再直接调 source.lyric 绕过缓存/回退链路(旧实现只显示 CC 字幕);
+ * - 工具行:搜索歌词 / -0.5s / +0.5s / 偏移显示 / 来源标签;
+ * - 搜索模式:MC 原生 EditBox 输入(IME/光标/粘贴,与 YaclSearchScreen 一致),
+ *   三源并行搜索(LyricManager.manualSearch),点击候选手动绑定
+ *   (LyricManager.bind),成功后回歌词视图并刷新 HUD 缓存;
+ * - 偏移即点即存(LyricManager.adjustOffset,推送 Hub),HUD 同步重载。
  */
 class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiText.t("歌词", "Lyrics"))) {
 
@@ -28,8 +43,34 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
     private var autoFollow = true
     private var lastSongId: String? = null
 
+    /** 当前歌词偏移(秒;显示时间 = 播放位置 - offsetSec*1000) */
+    private var offsetSec: Float = 0f
+
+    /** 来源标签("本地缓存"/"Hub"/"CC字幕"/来源名) */
+    private var sourceLabel: String = ""
+
+    // ---- 搜索模式状态 ----
+    private var searchMode = false
+    private var candidates: List<LyricCandidate> = emptyList()
+    private var searching = false
+
+    private var editBox: EditBox? = null
+
     private val rectBackBtn = YaclTheme.Rect(0, 0, 0, 0)
     private val rectFollowBtn = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectSearchBtn = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectMinusBtn = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectPlusBtn = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectSearchGoBtn = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectSearchBackBtn = YaclTheme.Rect(0, 0, 0, 0)
+
+    override fun init() {
+        super.init()
+        val box = EditBox(font, width / 2 - 150, 42, 260, 16, Component.literal(UiText.t("搜索歌词", "Search Lyrics")))
+        box.setMaxLength(60)
+        editBox = box
+        addWidget(box)
+    }
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
         val g = GuiGraphicsHudGui(graphics)
@@ -38,21 +79,49 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
 
         YaclTheme.drawBackground(g, w, h)
 
+        val song = player.current
+
+        if (searchMode) {
+            drawSearchMode(graphics, g, w, h, mouseX, mouseY)
+            return
+        }
+
         rectBackBtn.x1 = 12; rectBackBtn.y1 = 10; rectBackBtn.x2 = 56; rectBackBtn.y2 = 26
         YaclTheme.drawBtn(g, rectBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
 
-        // 歌名 + 跟随开关
-        val song = player.current
+        // 歌名 + 工具行(搜索歌词 / -0.5s / +0.5s / 偏移 / 跟随)
         val songTitle = song?.title?.ifBlank { UiText.t("未知标题", "Unknown") } ?: UiText.t("未在播放", "Not Playing")
-        YaclTheme.drawCenteredTitle(g, songTitle, w / 2, 12)
+        // 歌名用 marquee 横向滚动(与主界面一致):裸居中 drawText 在长标题
+        // (B 站 30~80 字常见)下会盖住左右按钮
+        val titleMaxW = minOf(w - 112, 240)
+        YaclTheme.drawMarqueeText(g, songTitle, w / 2 - titleMaxW / 2, 12, 14f, titleMaxW, YaclTheme.colorTextMain)
 
-        rectFollowBtn.x1 = w / 2 + 120; rectFollowBtn.y1 = 10
-        rectFollowBtn.x2 = w / 2 + 120 + 48; rectFollowBtn.y2 = 26
+        // 工具行(第二行,歌名下方):搜索歌词 / -0.5s / 偏移 / +0.5s / 跟随
+        val toolY = 34
+        val toolH = 16
+        rectSearchBtn.x1 = 12; rectSearchBtn.y1 = toolY; rectSearchBtn.x2 = 12 + 62; rectSearchBtn.y2 = toolY + toolH
+        YaclTheme.drawBtn(g, rectSearchBtn, UiText.t("搜索歌词", "Search Lyrics"), mouseX, mouseY)
+        rectMinusBtn.x1 = w / 2 - 78; rectMinusBtn.y1 = toolY; rectMinusBtn.x2 = w / 2 - 28; rectMinusBtn.y2 = toolY + toolH
+        YaclTheme.drawBtn(g, rectMinusBtn, "-0.5s", mouseX, mouseY)
+        rectPlusBtn.x1 = w / 2 + 28; rectPlusBtn.y1 = toolY; rectPlusBtn.x2 = w / 2 + 78; rectPlusBtn.y2 = toolY + toolH
+        YaclTheme.drawBtn(g, rectPlusBtn, "+0.5s", mouseX, mouseY)
+        rectFollowBtn.x1 = w - 68; rectFollowBtn.y1 = toolY; rectFollowBtn.x2 = w - 12; rectFollowBtn.y2 = toolY + toolH
         YaclTheme.drawBtn(g, rectFollowBtn, if (autoFollow) UiText.t("跟随:开", "Follow: On") else UiText.t("跟随:关", "Follow: Off"), mouseX, mouseY)
 
-        // Lyrics加载
+        // 偏移 + 来源标签(第二行中间)
+        YaclTheme.drawCenteredClipped(
+            g,
+            UiText.t("偏移 ${"%.1f".format(offsetSec)}s · $sourceLabel", "Offset ${"%.1f".format(offsetSec)}s · $sourceLabel"),
+            w / 2,
+            toolY + 2,
+            9f,
+            96,
+            YaclTheme.colorTextSub,
+        )
+
+        // 歌词加载
         if (song == null) {
-            g.drawText(UiText.t("未在播放", "Not Playing"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("未在播放", "Not Playing"), w / 2 - 160, 60, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
         if (song.id != lastSongId) {
@@ -62,41 +131,28 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             error = null
             scroll = 0
             autoFollow = true
-            val reqSongId = song.id
-            NetMusic.source.lyric(reqSongId) { list, err ->
-                // 回调在后台线程(BilibiliSource 直接 executor.execute 回调):
-                // 切 UI 线程更新;并校验请求时的歌曲 id —— 快速切歌后旧请求晚到
-                // 不得覆盖新歌的歌词(否则显示与当前歌不匹配的歌词直到再次切歌)
-                Async.onUi {
-                    if (reqSongId != player.current?.id) return@onUi
-                    if (err != null) {
-                        error = err
-                        loaded = true
-                    } else {
-                        lines = list
-                        loaded = true
-                    }
-                }
-            }
+            offsetSec = 0f
+            sourceLabel = ""
+            loadLyrics(song.id)
         }
         if (!loaded) {
-            g.drawText(UiText.t("歌词加载中…", "Loading lyrics…"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("歌词加载中…", "Loading lyrics…"), w / 2 - 160, 60, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
-        if (error != null) {
-            YaclTheme.drawTextClipped(g, UiText.t("歌词加载失败: $error", "Failed to load lyrics: $error"), w / 2 - 100, 40, 11f, 200, YaclTheme.colorError)
+        if (error != null && lines.isEmpty()) {
+            YaclTheme.drawCenteredClipped(g, UiText.t("歌词加载失败: $error", "Failed to load lyrics: $error"), w / 2, 60, 11f, (w - 48).coerceAtLeast(40), YaclTheme.colorError)
             return
         }
         if (lines.isEmpty()) {
-            g.drawText(UiText.t("暂无歌词", "No lyrics"), w / 2 - 160, 40, 12f, 1f, YaclTheme.colorTextDim)
+            g.drawText(UiText.t("暂无歌词,点「搜索歌词」手动绑定", "No lyrics. Tap \"Search Lyrics\" to bind manually"), w / 2 - 160, 60, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
 
         // 当前行(自动跟随)
         val posMs = player.engine.positionMs()
-        val currentIndex = Lrc.findLineIndex(lines, posMs)
+        val currentIndex = Lrc.findLineIndex(lines, posMs - (offsetSec * 1000f).toInt())
         val rowH = 18
-        val listTop = 44
+        val listTop = 62
         val visibleRows = (h - listTop - 8) / rowH
         if (autoFollow) {
             scroll = (currentIndex - visibleRows / 3).coerceAtLeast(0)
@@ -106,7 +162,9 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
 
         // Lyrics列表
         val listX = w / 2 - 160
-        val textMaxW = 318
+        // 歌词文本可用宽度:给右侧时间列留位 —— 时间列右对齐锚在 listX+318 起约 27px,
+        // 歌词若画满 318 会与时间文本重叠
+        val textMaxW = 274
         var idx = scroll
         var y = listTop
         while (idx < lines.size && y + rowH < h - 8) {
@@ -121,23 +179,201 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
                 g.fill(listX - 6, y, listX + textMaxW, y + rowH, YaclTheme.colorRowCurrent)
                 g.fill(listX - 6, y, listX - 3, y + rowH, YaclTheme.colorAccent)
             }
-            YaclTheme.drawTextClipped(g, line.text, listX, y + 2, if (isCurrent) 12f else 11f, textMaxW, color)
-            // 时间列:右对齐到列表右端(旧实现左对齐锚在 listX+318 且宽度 42,
-            // 会画出 320 边界与歌词文本重叠)
+            // 当前行歌词用 marquee 横向滚动显示全名(与主界面歌名一致,超长不截断),
+            // 其余行保持截断;maxWidth 收窄到 textMaxW,滚动也不撞时间列
+            if (isCurrent) {
+                YaclTheme.drawMarqueeText(g, line.text, listX, y + 2, 12f, textMaxW, color)
+            } else {
+                YaclTheme.drawTextClipped(g, line.text, listX, y + 2, 11f, textMaxW, color)
+            }
+            // 时间列:右对齐到列表右端(listX+318 起),落在歌词区(textMaxW=274)右侧留白处
             val timeText = Widgets.formatTime(line.timeMs)
             val tw = g.textWidth(timeText).toInt()
-            g.drawText(timeText, listX + textMaxW - tw, y + 5, 8f, 1f, YaclTheme.colorTextFaint)
+            g.drawText(timeText, listX + 318 - tw, y + 5, 8f, 1f, YaclTheme.colorTextFaint)
             y += rowH
             idx++
         }
     }
 
+    /** 搜索模式渲染:EditBox + 三源搜索结果列表(点击绑定)+ 返回歌词视图 */
+    private fun drawSearchMode(graphics: GuiGraphicsExtractor, g: GuiGraphicsHudGui, w: Int, h: Int, mouseX: Int, mouseY: Int) {
+        YaclTheme.drawCenteredTitle(g, UiText.t("搜索歌词", "Search Lyrics"), w / 2, 10)
+
+        rectSearchBackBtn.x1 = 12; rectSearchBackBtn.y1 = 10; rectSearchBackBtn.x2 = 56; rectSearchBackBtn.y2 = 26
+        YaclTheme.drawBtn(g, rectSearchBackBtn, UiText.t("< 返回", "< Back"), mouseX, mouseY)
+
+        // 输入框(MC 原生渲染,与 YaclSearchScreen 一致)
+        editBox?.extractWidgetRenderState(graphics, mouseX, mouseY, 0f)
+
+        rectSearchGoBtn.x1 = width / 2 + 118; rectSearchGoBtn.y1 = 42
+        rectSearchGoBtn.x2 = width / 2 + 174; rectSearchGoBtn.y2 = 58
+        YaclTheme.drawBtn(g, rectSearchGoBtn, if (searching) "…" else UiText.t("搜索", "Search"), mouseX, mouseY, accent = true)
+
+        if (searching) {
+            g.drawText(UiText.t("搜索中…", "Searching…"), w / 2 - 40, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            return
+        }
+        if (candidates.isEmpty()) {
+            g.drawText(UiText.t("输入关键词搜索三源歌词", "Search lyrics from 3 sources"), w / 2 - 100, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            return
+        }
+
+        // 候选列表
+        val rowH = 22
+        val listX = 24
+        val listW = w - 48
+        var y = 74
+        for (c in candidates) {
+            if (y + rowH > h - 8) break
+            val hover = mouseY in y until y + rowH && mouseX in listX until listX + listW
+            if (hover) g.fill(listX, y, listX + listW, y + rowH, YaclTheme.colorRowHover)
+            YaclTheme.drawTextClipped(g, c.title.ifBlank { UiText.t("未知歌曲", "Unknown") }, listX + 6, y + 1, 11f, listW - 130, YaclTheme.colorTextMain)
+            YaclTheme.drawTextClipped(
+                g,
+                "${c.artist} · ${LyricProviders.sourceLabel(c.source)}",
+                listX + 6,
+                y + 12,
+                9f,
+                listW - 130,
+                YaclTheme.colorTextDim,
+            )
+            g.drawText(Widgets.formatTime(c.durationMs), listX + listW - 52, y + 4, 9f, 1f, YaclTheme.colorTextFaint)
+            y += rowH
+        }
+        YaclTheme.drawScrollHint(g, w, h)
+    }
+
+    // ---------------- 加载 / 偏移 / 搜索 ----------------
+
+    /** 经 LyricManager 加载(缓存 → Hub → CC → 标题回退),而非直接 source.lyric */
+    private fun loadLyrics(songId: String) {
+        val song = player.current ?: return
+        LyricManager.load(song) { result, err ->
+            Async.onUi {
+                if (songId != player.current?.id) return@onUi
+                lines = result.lines
+                offsetSec = result.offsetSec
+                sourceLabel = result.from
+                loaded = true
+                error = err
+            }
+        }
+    }
+
+    /** 调整偏移 ±0.5s:即点即存,推送 Hub,HUD 同步重载 */
+    private fun adjustOffset(deltaSec: Float) {
+        val song = player.current ?: return
+        LyricManager.adjustOffset(song, deltaSec) { newOffset ->
+            offsetSec = newOffset
+            HudLyricsCache.invalidate()
+        }
+    }
+
+    /** 进入搜索模式 */
+    private fun enterSearchMode() {
+        searchMode = true
+        candidates = emptyList()
+        searching = false
+        editBox?.setValue("")
+        editBox?.setFocused(true)
+    }
+
+    /** 退出搜索模式回歌词视图 */
+    private fun exitSearchMode() {
+        searchMode = false
+        candidates = emptyList()
+        searching = false
+    }
+
+    private fun doSearch() {
+        val keyword = editBox?.getValue()?.trim().orEmpty()
+        if (keyword.isEmpty() || searching) return
+        searching = true
+        candidates = emptyList()
+        LyricManager.manualSearch(keyword) { list, err ->
+            Async.onUi {
+                if (!searchMode) return@onUi
+                searching = false
+                if (err != null && list.isEmpty()) {
+                    candidates = emptyList()
+                    error = err
+                } else {
+                    candidates = list
+                    error = null
+                }
+            }
+        }
+    }
+
+    /** 点击候选行:手动绑定歌词 → 回歌词视图 + HUD 缓存重载 */
+    private fun bindCandidate(index: Int) {
+        val candidate = candidates.getOrNull(index) ?: return
+        val song = player.current ?: return
+        LyricManager.bind(song, candidate) { result, err ->
+            Async.onUi {
+                if (!searchMode) return@onUi
+                if (result.lines.isEmpty()) {
+                    error = err ?: UiText.t("该来源暂无歌词", "No lyrics from this source")
+                    return@onUi
+                }
+                lines = result.lines
+                offsetSec = result.offsetSec
+                sourceLabel = result.from
+                loaded = true
+                error = null
+                scroll = 0
+                autoFollow = true
+                exitSearchMode()
+                HudLyricsCache.invalidate()
+            }
+        }
+    }
+
+    // ---------------- 交互 ----------------
+
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val x = event.x()
         val y = event.y()
+        if (searchMode) {
+            if (rectSearchBackBtn.hit(x, y)) { exitSearchMode(); return true }
+            if (rectSearchGoBtn.hit(x, y)) { doSearch(); return true }
+            // EditBox 点击聚焦交给 MC Screen 自动分发(addWidget 注册的组件)
+            // 候选行点击绑定
+            if (candidates.isNotEmpty()) {
+                val rowH = 22
+                val listX = 24
+                val listW = width - 48
+                if (x >= listX && x < listX + listW && y >= 74) {
+                    val row = (y - 74).toInt() / rowH
+                    if (row in candidates.indices) {
+                        bindCandidate(row)
+                        return true
+                    }
+                }
+            }
+            return true
+        }
         if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
+        if (rectSearchBtn.hit(x, y)) { enterSearchMode(); return true }
+        if (rectMinusBtn.hit(x, y)) { adjustOffset(-0.5f); return true }
+        if (rectPlusBtn.hit(x, y)) { adjustOffset(0.5f); return true }
         if (rectFollowBtn.hit(x, y)) { autoFollow = !autoFollow; return true }
         return super.mouseClicked(event, doubleClick)
+    }
+
+    override fun keyPressed(event: KeyEvent): Boolean {
+        if (searchMode) {
+            if (event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER || event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+                doSearch()
+                return true
+            }
+            val box = editBox
+            if (box != null && box.isFocused) {
+                if (box.keyPressed(event)) return true
+            }
+            return true
+        }
+        return super.keyPressed(event)
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {

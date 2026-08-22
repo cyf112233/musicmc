@@ -169,7 +169,8 @@ class YaclLoginScreen(private val back: Screen) : Screen(Component.literal(UiTex
             status.contains("failed") || status.contains("expired") -> YaclTheme.colorError
             else -> YaclTheme.colorTextSub
         }
-        g.drawText(status, w / 2 - g.textWidth(status) / 2, qrY + qrSize + 14, 11f, 1f, statusColor)
+        // 状态文本可能带网络异常 e.message(长 URL 等):居中截断,避免顶到屏幕边缘
+        YaclTheme.drawCenteredClipped(g, status, w / 2, qrY + qrSize + 14, 11f, (w - 24).coerceAtLeast(40), statusColor)
 
         rectRefreshBtn.x1 = w / 2 - 50; rectRefreshBtn.y1 = qrY + qrSize + 34
         rectRefreshBtn.x2 = w / 2 + 50; rectRefreshBtn.y2 = qrY + qrSize + 58

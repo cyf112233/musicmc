@@ -2,6 +2,7 @@ package io.github.cyf112233.musicmc.config
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -64,17 +65,22 @@ data class ModConfig(
         fun load(dir: Path): ModConfig {
             return try {
                 val file = dir.resolve("musicmc.json")
-                val parsed = if (Files.isReadable(file)) {
-                    gson.fromJson(Files.readString(file), ModConfig::class.java) ?: ModConfig()
-                } else {
-                    ModConfig()
-                }
+                if (!Files.isReadable(file)) return ModConfig()
+                val text = Files.readString(file)
+                val parsed = gson.fromJson(text, ModConfig::class.java) ?: ModConfig()
                 // 旧配置兼容:ModConfig 是 data class,无参构造器不存在(Kotlin data class 即使
                 // 全部参数有默认值也不生成),Gson 走 Unsafe 实例化 —— 缺失字段 = JVM 默认值
                 // (Boolean=false / Float=0f / String=null),不会套用 Kotlin 默认值。
-                // hudX==0f 且 hudY==0f 是"HUD 字段缺失"的哨兵(旧配置无这些字段时 Gson 给 0),
+                // 旧配置(在 HUD 字段引入前保存的 musicmc.json)没有 hudX 字段 → Gson 给 0,
                 // 命中即回填 HUD 默认,保证老配置升级后 HUD 默认开启且位置/缩放正确。
-                if (parsed.hudX == 0f && parsed.hudY == 0f) {
+                // 注意:不能用"hudX==0f && hudY==0f"当哨兵 —— 用户在 HUD 编辑器把面板拖到
+                // 屏幕左上角(锚点 0,0)保存后,hudX/hudY 就是 0f,下次启动会被误判为
+                // "旧配置缺字段"而重置回默认位置(HUD 位置每次启动自动重置的根因)。
+                // 改为直接检查原始 JSON 是否含 hudX 字段:只有字段**不存在**才算旧配置。
+                val hasHudField = runCatching {
+                    JsonParser.parseString(text).let { el -> el.isJsonObject && el.asJsonObject.has("hudX") }
+                }.getOrDefault(true)
+                if (!hasHudField) {
                     parsed.copy(
                         hudEnabled = true,
                         hudX = 0.92f,
