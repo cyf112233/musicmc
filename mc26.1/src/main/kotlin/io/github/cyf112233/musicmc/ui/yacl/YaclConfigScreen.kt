@@ -250,7 +250,7 @@ object YaclConfigScreen {
             .option(
                 ButtonOption.createBuilder()
                     .name(Component.literal(UiText.t("清除音频缓存", "Clear Audio Cache")))
-                    .description {
+                    .description(
                         OptionDescription.of(
                             Component.literal(
                                 UiText.t(
@@ -258,8 +258,8 @@ object YaclConfigScreen {
                                     "Played songs are cached locally for offline playback. Current usage: ${formatBytes(io.github.cyf112233.musicmc.player.AudioCache.totalSize())}",
                                 ),
                             ),
-                        )
-                    }
+                        ),
+                    )
                     .text(Component.literal(UiText.t("清除", "Clear")))
                     .action { _ ->
                         val freed = io.github.cyf112233.musicmc.player.AudioCache.clear()
@@ -278,7 +278,7 @@ object YaclConfigScreen {
             .option(
                 ButtonOption.createBuilder()
                     .name(Component.literal(UiText.t("B 站账号", "Bilibili Account")))
-                    .description {
+                    .description(
                         OptionDescription.of(
                             Component.literal(
                                 if (NetMusic.bilibiliLoggedIn()) {
@@ -287,8 +287,8 @@ object YaclConfigScreen {
                                     UiText.t("扫码登录 B 站(可选):搜索个性化、降低风控、流媒体优先提升", "QR-login to Bilibili (optional): personalized search, lower risk control, stream priority")
                                 },
                             ),
-                        )
-                    }
+                        ),
+                    )
                     .text(
                         Component.literal(
                             if (NetMusic.bilibiliLoggedIn()) UiText.t("退出登录", "Log Out") else UiText.t("扫码登录", "QR Login"),
@@ -301,7 +301,8 @@ object YaclConfigScreen {
                                 Component.literal(UiText.t("已退出登录", "Logged out")),
                             )
                         } else {
-                            // 打开扫码登录页(返回本配置屏)
+                            // 打开扫码登录页(返回本配置屏;McScreens.current() 可能为 null,
+                            // YaclLoginScreen 接受可空 back)
                             io.github.cyf112233.musicmc.platform.McScreens.open(YaclLoginScreen(io.github.cyf112233.musicmc.platform.McScreens.current()))
                         }
                     }

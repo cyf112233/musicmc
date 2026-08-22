@@ -25,8 +25,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * 渲染回调(extractRenderState,GL 上下文有效)里创建 DynamicTexture 注册后 blit。
  *
  * 轮询:后台 2s 轮询 [BiliHttp.qrPoll],成功即 [NetMusic.setBilibiliCookie] 并返回上一页。
+ * [back] 可为 null(从配置屏等无固定 parent 的入口进入时,登录成功只提示不切屏)。
  */
-class YaclLoginScreen(private val back: Screen) : Screen(Component.literal(UiText.t("登录", "Login"))) {
+class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiText.t("登录", "Login"))) {
 
     private val mc get() = Minecraft.getInstance()
     private val textureManager get() = mc.textureManager

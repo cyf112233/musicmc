@@ -330,7 +330,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             if (err != null) {
                 // 轻提示:聊天栏输出错误(与 ChatLyricSender 同一套 API,已验证可编译)
                 Minecraft.getInstance().gui.getChat().addClientSystemMessage(
-                    Component.literal(err).withColor(0xFFFF5C5C),
+                    Component.literal(err).withColor(0xFFFF5C5C.toInt()),
                 )
             }
         }

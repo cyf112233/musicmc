@@ -121,8 +121,9 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
 
         // 列表
         val list = folders
-        if (error != null) {
-            YaclTheme.drawCenteredClipped(g, error, w / 2, h / 2 - 30, 11f, (w - 48).coerceAtLeast(40), YaclTheme.colorError)
+        val errMsg = error
+        if (errMsg != null) {
+            YaclTheme.drawCenteredClipped(g, errMsg, w / 2, h / 2 - 30, 11f, (w - 48).coerceAtLeast(40), YaclTheme.colorError)
             return
         }
         if (list == null) {
@@ -227,7 +228,7 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
             if (err != null) {
                 // 轻提示:聊天栏输出错误
                 Minecraft.getInstance().gui.getChat().addClientSystemMessage(
-                    Component.literal(err).withColor(0xFFFF5C5C),
+                    Component.literal(err).withColor(0xFFFF5C5C.toInt()),
                 )
                 return@toggleFavInFolder
             }
@@ -246,7 +247,7 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
             creating = false
             if (err != null) {
                 Minecraft.getInstance().gui.getChat().addClientSystemMessage(
-                    Component.literal(err).withColor(0xFFFF5C5C),
+                    Component.literal(err).withColor(0xFFFF5C5C.toInt()),
                 )
                 return@createFolder
             }
