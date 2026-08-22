@@ -47,6 +47,8 @@ object YaclConfigScreen {
         var lyricsEnabled = cfg.lyricsEnabled
         var hudLyricEnabled = cfg.hudLyricEnabled
         var chatLyricEnabled = cfg.chatLyricEnabled
+        var lyricTitleFallback = cfg.lyricTitleFallback
+        var hubUrl = cfg.hubUrl
         var hudEnabled = cfg.hudEnabled
         var nativeOverride = cfg.nativePlatformOverride
         var nativeCacheDir = cfg.nativeCacheDir
@@ -162,6 +164,21 @@ object YaclConfigScreen {
             .option(boolOption(UiText.t("显示歌词", "Show Lyrics"), UiText.t("播放时显示当前歌曲歌词", "Show lyrics while playing"), { lyricsEnabled }, { lyricsEnabled = it }))
             .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), { hudLyricEnabled }, { hudLyricEnabled = it }))
             .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), { chatLyricEnabled }, { chatLyricEnabled = it }))
+            .option(boolOption(UiText.t("标题自动匹配歌词", "Title Fallback"), UiText.t("无 CC 字幕时按歌曲标题在网易云/QQ音乐/酷狗自动匹配歌词", "When no CC subtitles, auto-match lyrics by title from NetEase/QQ Music/Kugou"), { lyricTitleFallback }, { lyricTitleFallback = it }))
+            .option(
+                Option.createBuilder<String>()
+                    .name(Component.literal(UiText.t("歌词 Hub 地址", "Lyrics Hub URL")))
+                    .description {
+                        OptionDescription.of(
+                            Component.literal(
+                                UiText.t("自建歌词同步服务地址(多设备共享歌词与偏移),留空不启用。如 http://192.168.1.100:8787", "Self-hosted lyrics sync server URL (share lyrics & offsets across devices). Leave empty to disable. e.g. http://192.168.1.100:8787"),
+                            ),
+                        )
+                    }
+                    .binding("", { hubUrl }, { hubUrl = it.trim() })
+                    .controller { StringControllerBuilder.create(it) }
+                    .build(),
+            )
             .build()
 
         val categoryHud = ConfigCategory.createBuilder()
@@ -229,6 +246,8 @@ object YaclConfigScreen {
                         lyricsEnabled = lyricsEnabled,
                         hudLyricEnabled = hudLyricEnabled,
                         chatLyricEnabled = chatLyricEnabled,
+                        lyricTitleFallback = lyricTitleFallback,
+                        hubUrl = hubUrl,
                         hudEnabled = hudEnabled,
                         nativePlatformOverride = nativeOverride,
                         nativeCacheDir = nativeCacheDir,
