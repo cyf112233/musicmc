@@ -13,8 +13,8 @@
 
 ## 安装
 
-- **NeoForge**:MC 26.1 / 26.2 + [YACL](https://modrinth.com/mod/yacl)(必须,`yet_another_config_lib_v3`)+ KotlinForForge(FCL 自带)
-- **Fabric**:MC 26.1 / 26.2 + Fabric API + Fabric Language Kotlin + YACL
+- **NeoForge**:MC 26.1 / 26.2 + [YACL](https://modrinth.com/mod/yacl)(必须,`yet_another_config_lib_v3`)+ [KotlinForForge](https://modrinth.com/mod/kotlin-for-forge)(必须,`kotlinforforge`;**FCL 等启动器不内置,需自行安装**)
+- **Fabric**:MC 26.1 / 26.2 + Fabric API + [Fabric Language Kotlin](https://modrinth.com/mod/fabric-language-kotlin)(必须)+ YACL
 - 全部 6 平台 FFmpeg 原生库已内嵌(linux / windows / android × arm64 / x86_64),无需额外安装
 - 游戏内按 `M` 打开界面,或 `/netmusic`
 

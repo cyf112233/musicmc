@@ -50,3 +50,15 @@ license="GPL-3.0"
     versionRange="[3.9.6,)"
     ordering="AFTER"
     side="BOTH"
+
+# KotlinForForge is a required runtime dependency: this mod's entry class is
+# Kotlin, and the Kotlin runtime must be on the classpath for the JVM to load
+# it. NOTE: FCL / other launchers do NOT bundle KotlinForForge — install it
+# manually (Modrinth: kotlin-for-forge). The mod is compiled against Kotlin
+# 2.4.x; KFF 4.0+ ships a compatible 2.x runtime.
+[[dependencies.musicmc]]
+    modId="kotlinforforge"
+    type="required"
+    versionRange="[4.0.0,)"
+    ordering="AFTER"
+    side="BOTH"
