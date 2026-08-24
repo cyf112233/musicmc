@@ -26,11 +26,14 @@ import net.minecraft.network.chat.Component
  */
 object YaclConfigScreen {
 
-    /** UI 方案(含 AUTO 默认;字符串值与 ModConfig.uiMode 兼容,含旧值 LDLIB) */
+    /** UI 方案(含 AUTO 默认;字符串值与 ModConfig.uiMode 兼容,含旧值 LDLIB / VANILLA) */
     enum class UiModeOption(val label: String, val value: String) {
         AUTO(UiText.t("自动(装了哪个用哪个)", "Auto (use whichever is installed)"), "AUTO"),
         MODERN_UI("ModernUI", "MODERN_UI"),
         YACL(UiText.t("YACL 现代化", "YACL (Modern)"), "YACL"),
+        // 保留旧配置的 VANILLA(原版 UI 时代遗留);运行期解析仍按 YACL 处理,
+        // 但保存时不再把用户配置值静默改写为 YACL(仅当用户显式选择时才变更)
+        VANILLA(UiText.t("原版(映射到 YACL)", "Vanilla (maps to YACL)"), "VANILLA"),
     }
 
     /** 字节数转可读大小(音频缓存占用/清除量展示;与 MUI SettingsFragment 一致) */
@@ -47,14 +50,16 @@ object YaclConfigScreen {
         // 本地可变值(YACL binding 读写;保存时统一写 config)
         var uiMode = when (cfg.uiMode.uppercase()) {
             "MODERN_UI" -> UiModeOption.MODERN_UI
-            "YACL", "LDLIB", "VANILLA" -> UiModeOption.YACL
+            "YACL", "LDLIB" -> UiModeOption.YACL
+            "VANILLA" -> UiModeOption.VANILLA
             else -> UiModeOption.AUTO
         }
         var volume = cfg.volume
         // 码率在 UI 层按 kbps 展示(配置存 bps:如 320000;滑块 range 96..320 是 kbps 语义)。
         // 不做换算的话 binding 读写同一个 bps 值,滑块首显 320000(超出 range)且保存后
-        // 配置被改写成 320 —— 缓存 key(歌曲id_码率)变化导致已缓存歌曲重新下载
-        var bitrateKbps = cfg.bitrate / 1000
+        // 配置被改写成 320 —— 缓存 key(歌曲id_码率)变化导致已缓存歌曲重新下载。
+        // 若存储值超出滑块范围(手改配置等),先收敛到范围内,避免滑块首显越界。
+        var bitrateKbps = (cfg.bitrate / 1000).coerceIn(96, 320)
         var playMode = cfg.playMode
         var lyricsEnabled = cfg.lyricsEnabled
         var hudLyricEnabled = cfg.hudLyricEnabled
@@ -62,10 +67,37 @@ object YaclConfigScreen {
         var lyricTitleFallback = cfg.lyricTitleFallback
         var hubUrl = cfg.hubUrl
         var hudEnabled = cfg.hudEnabled
+        var hudScale = cfg.hudScale
         var nativeOverride = cfg.nativePlatformOverride
         var nativeCacheDir = cfg.nativeCacheDir
 
-        fun boolOption(name: String, desc: String, default: Boolean, get: () -> Boolean, set: (Boolean) -> Unit): Option<Boolean> =
+        /**
+         * 立即把当前编辑中的选项值写入配置。
+         * YACL 3.9.6 的 saveFunction 只在 finishOrSave(关闭/保存)时执行;屏幕内
+         * ButtonOption(切换 UI / HUD 编辑器 / 登录)直接 McScreens.open 替换屏幕时会
+         * 跳过 save,导致未保存的选项编辑静默丢失。导航前调用本函数可避免该问题。
+         */
+        fun applyChanges() {
+            NetMusic.updateConfig { old ->
+                old.copy(
+                    uiMode = uiMode.value,
+                    volume = volume.coerceIn(0f, 1f),
+                    bitrate = bitrateKbps * 1000,
+                    playMode = playMode,
+                    lyricsEnabled = lyricsEnabled,
+                    hudLyricEnabled = hudLyricEnabled,
+                    chatLyricEnabled = chatLyricEnabled,
+                    lyricTitleFallback = lyricTitleFallback,
+                    hubUrl = hubUrl,
+                    hudEnabled = hudEnabled,
+                    hudScale = hudScale,
+                    nativePlatformOverride = nativeOverride,
+                    nativeCacheDir = nativeCacheDir,
+                )
+            }
+        }
+
+        fun boolOption(name: String, desc: String, default: Boolean, get: () -> Boolean, set: (Boolean) -> Unit, available: Boolean = true): Option<Boolean> =
             Option.createBuilder<Boolean>()
                 .name(Component.literal(name))
                 .description { OptionDescription.of(Component.literal(desc)) }
@@ -73,6 +105,9 @@ object YaclConfigScreen {
                 // YACL 用 binding 默认值驱动"与默认不同"标记 / 重置按钮,
                 // 硬编码默认会让未改动项误亮重置态
                 .binding(default, get, set)
+                // available 是构建期的静态布尔(YACL 3.9.6 无 reactive 版本),
+                // 由调用方按当前配置值传入,开屏时反映正确的可用态
+                .available(available)
                 .controller { BooleanControllerBuilder.create(it).coloured(true).yesNoFormatter() }
                 .build()
 
@@ -108,6 +143,9 @@ object YaclConfigScreen {
                     // Android 恒 YACL,无切换意义 → 隐藏
                     .available(!io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge.isAndroid())
                     .action { _ ->
+                        // 先落盘当前编辑(含 UI 方案下拉的选择),再切换:
+                        // 否则未保存的编辑会在切屏时丢失(见 applyChanges 注释)
+                        applyChanges()
                         val current = UiBackendResolver.resolve(
                             NetMusic.config.uiMode,
                             io.github.cyf112233.musicmc.player.ffmpeg.NativeLibBridge.isAndroid(),
@@ -177,9 +215,11 @@ object YaclConfigScreen {
         val categoryLyrics = ConfigCategory.createBuilder()
             .name(Component.literal(UiText.t("歌词", "Lyrics")))
             .option(boolOption(UiText.t("显示歌词", "Show Lyrics"), UiText.t("播放时显示当前歌曲歌词", "Show lyrics while playing"), cfg.lyricsEnabled, { lyricsEnabled }, { lyricsEnabled = it }))
-            .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), cfg.hudLyricEnabled, { hudLyricEnabled }, { hudLyricEnabled = it }))
-            .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), cfg.chatLyricEnabled, { chatLyricEnabled }, { chatLyricEnabled = it }))
-            .option(boolOption(UiText.t("标题自动匹配歌词", "Title Fallback"), UiText.t("无 CC 字幕时按歌曲标题在网易云/QQ音乐/酷狗自动匹配歌词", "When no CC subtitles, auto-match lyrics by title from NetEase/QQ Music/Kugou"), cfg.lyricTitleFallback, { lyricTitleFallback }, { lyricTitleFallback = it }))
+            // 三个子开关依赖歌词总开关:总开关关闭时禁用(对齐 MUI SettingsFragment 联动;
+            // available 是开屏时按当前配置取值的静态布尔)
+            .option(boolOption(UiText.t("HUD 歌词", "HUD Lyrics"), UiText.t("游戏内悬浮面板显示歌词", "Show lyrics on the in-game HUD"), cfg.hudLyricEnabled, { hudLyricEnabled }, { hudLyricEnabled = it }, available = cfg.lyricsEnabled))
+            .option(boolOption(UiText.t("聊天栏歌词", "Chat Lyrics"), UiText.t("每句歌词同步输出到聊天栏", "Also send each lyric line to chat"), cfg.chatLyricEnabled, { chatLyricEnabled }, { chatLyricEnabled = it }, available = cfg.lyricsEnabled))
+            .option(boolOption(UiText.t("标题自动匹配歌词", "Title Fallback"), UiText.t("无 CC 字幕时按歌曲标题在网易云/QQ音乐/酷狗自动匹配歌词", "When no CC subtitles, auto-match lyrics by title from NetEase/QQ Music/Kugou"), cfg.lyricTitleFallback, { lyricTitleFallback }, { lyricTitleFallback = it }, available = cfg.lyricsEnabled))
             .option(
                 Option.createBuilder<String>()
                     .name(Component.literal(UiText.t("歌词 Hub 地址", "Lyrics Hub URL")))
@@ -200,11 +240,42 @@ object YaclConfigScreen {
             .name(Component.literal(UiText.t("HUD", "HUD")))
             .option(boolOption(UiText.t("悬浮播放面板", "HUD Panel"), UiText.t("游戏内显示音乐 HUD(封面/歌名/进度)", "Show the in-game music HUD (cover / title / progress)"), cfg.hudEnabled, { hudEnabled }, { hudEnabled = it }))
             .option(
+                Option.createBuilder<Int>()
+                    .name(Component.literal(UiText.t("HUD 缩放", "HUD Scale")))
+                    .description { OptionDescription.of(Component.literal(UiText.t("悬浮面板整体缩放 50-200%", "HUD panel overall scale 50-200%"))) }
+                    .binding(
+                        (cfg.hudScale * 100).toInt().coerceIn(50, 200),
+                        { (hudScale * 100).toInt() },
+                        { hudScale = (it / 100f).coerceIn(0.5f, 2.0f) },
+                    )
+                    .controller {
+                        IntegerSliderControllerBuilder.create(it)
+                            .range(50, 200)
+                            .step(10)
+                            .valueFormatter { v -> Component.literal("$v%") }
+                    }
+                    .build(),
+            )
+            .option(
                 ButtonOption.createBuilder()
                     .name(Component.literal(UiText.t("打开 HUD 编辑器", "Open HUD Editor")))
                     .description(OptionDescription.of(Component.literal(UiText.t("拖动调整悬浮面板位置,滚轮缩放;拖动时实时生效", "Drag to move the HUD, scroll to scale; changes apply live"))))
                     .text(Component.literal(UiText.t("编辑", "Edit")))
-                    .action { io.github.cyf112233.musicmc.platform.McScreens.open(YaclHudEditorScreen()) }
+                    // 打开编辑器前先落盘当前编辑,避免未保存改动在切屏时丢失
+                    .action { applyChanges(); io.github.cyf112233.musicmc.platform.McScreens.open(YaclHudEditorScreen()) }
+                    .build(),
+            )
+            .option(
+                ButtonOption.createBuilder()
+                    .name(Component.literal(UiText.t("重置 HUD 位置", "Reset HUD Position")))
+                    .description(OptionDescription.of(Component.literal(UiText.t("把悬浮面板位置重置回默认(右下角)", "Reset the HUD back to its default position (bottom-right)"))))
+                    .text(Component.literal(UiText.t("重置", "Reset")))
+                    .action {
+                        NetMusic.updateConfig { it.copy(hudX = 0.92f, hudY = 0.86f) }
+                        Minecraft.getInstance().gui.getChat().addClientSystemMessage(
+                            Component.literal(UiText.t("HUD 位置已重置", "HUD position reset")),
+                        )
+                    }
                     .build(),
             )
             .build()
@@ -250,6 +321,8 @@ object YaclConfigScreen {
             .option(
                 ButtonOption.createBuilder()
                     .name(Component.literal(UiText.t("清除音频缓存", "Clear Audio Cache")))
+                    // ButtonOption 的 description 只接受 OptionDescription(非 lambda),
+                    // 占用量为建屏时的快照;清除后点开重进本屏即刷新
                     .description(
                         OptionDescription.of(
                             Component.literal(
@@ -300,9 +373,12 @@ object YaclConfigScreen {
                             Minecraft.getInstance().gui.getChat().addClientSystemMessage(
                                 Component.literal(UiText.t("已退出登录", "Logged out")),
                             )
+                            // 退出后重建本屏,刷新账号按钮/描述(否则仍显示旧登录态)
+                            open(io.github.cyf112233.musicmc.platform.McScreens.current())
                         } else {
-                            // 打开扫码登录页(返回本配置屏;McScreens.current() 可能为 null,
-                            // YaclLoginScreen 接受可空 back)
+                            // 打开扫码登录页前先落盘当前编辑(避免切屏丢失);返回本配置屏时
+                            // 重新 open() 刷新账号态。YaclLoginScreen 接受可空 back。
+                            applyChanges()
                             io.github.cyf112233.musicmc.platform.McScreens.open(YaclLoginScreen(io.github.cyf112233.musicmc.platform.McScreens.current()))
                         }
                     }
@@ -331,6 +407,7 @@ object YaclConfigScreen {
                         lyricTitleFallback = lyricTitleFallback,
                         hubUrl = hubUrl,
                         hudEnabled = hudEnabled,
+                        hudScale = hudScale,
                         nativePlatformOverride = nativeOverride,
                         nativeCacheDir = nativeCacheDir,
                     )

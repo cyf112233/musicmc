@@ -58,7 +58,7 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal(UiTex
         while (idx < queue.size && y + rowH < h - 8) {
             val song = queue[idx]
             RowCoverCache.request(song.picUrl)
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl, song.durationMs)
             y += rowH
             idx++
         }
@@ -83,7 +83,8 @@ class YaclQueueScreen(private val back: Screen) : Screen(Component.literal(UiTex
             val rowH = 24
             val listX = 12
             val listW = width - 24
-            if (x >= listX && x < listX + listW && y >= 40) {
+            // 上界与绘制一致(绘制止于 h-8),避免空白区映射到未渲染行
+            if (x >= listX && x < listX + listW && y >= 40 && y < height - 8) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in queue.indices) {
                     player.play(queue[row], queue.toList(), row)

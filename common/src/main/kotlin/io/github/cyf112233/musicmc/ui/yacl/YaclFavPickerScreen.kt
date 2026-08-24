@@ -6,7 +6,6 @@ import io.github.cyf112233.musicmc.bilibili.FavFolder
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.UiText
 import io.github.cyf112233.musicmc.platform.McScreens
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
@@ -36,6 +35,10 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
 
     private var createMode = false
     private var creating = false
+
+    /** 瞬时反馈消息(仿 MUI Toast;渲染在屏幕底部,一段时间后自动消失) */
+    private var feedback: String? = null
+    private var feedbackUntil = 0L
 
     private var editBox: EditBox? = null
 
@@ -110,6 +113,16 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
             )
         }
 
+        // 瞬时反馈消息(仿 MUI Toast;底部绘制,过期自动消失)
+        val fb = feedback
+        if (fb != null) {
+            if (System.currentTimeMillis() > feedbackUntil) {
+                feedback = null
+            } else {
+                YaclTheme.drawCenteredClipped(g, fb, w / 2, h - 22, 11f, (w - 24).coerceAtLeast(40), YaclTheme.colorAccentBright)
+            }
+        }
+
         // 新建收藏夹输入面板
         if (createMode) {
             editBox?.extractWidgetRenderState(graphics, mouseX, mouseY, 0f)
@@ -165,6 +178,11 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
         val y = event.y()
         if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectNewBtn.hit(x, y)) {
+            // 未登录时新建无意义(createFolder 必失败):给出反馈而非进入不可用的创建态
+            if (!NetMusic.bilibiliLoggedIn()) {
+                showFeedback(UiText.t("请先在设置中登录 B 站", "Please log in to Bilibili in Settings first"))
+                return true
+            }
             createMode = !createMode
             if (createMode) {
                 editBox?.setValue("")
@@ -183,7 +201,8 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
             val listX = 16
             val listW = width - 32
             val listTop = if (createMode) 70 else 48
-            if (x >= listX && x < listX + listW && y >= listTop) {
+            // 上界与绘制一致(绘制止于 h-8):无上界时空白区会静默切换屏外收藏夹的收藏态
+            if (x >= listX && x < listX + listW && y >= listTop && y < height - 8) {
                 val row = (y - listTop).toInt() / rowH + scroll
                 if (row in list.indices) {
                     toggleFolder(list[row])
@@ -201,10 +220,12 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
                 return true
             }
             val box = editBox
+            // 输入框聚焦时交给 EditBox 处理;未聚焦时不再无条件消费事件,
+            // 否则 Esc 等键在创建模式下永远无法关闭本屏
             if (box != null && box.isFocused) {
                 if (box.keyPressed(event)) return true
             }
-            return true
+            return super.keyPressed(event)
         }
         return super.keyPressed(event)
     }
@@ -222,38 +243,51 @@ class YaclFavPickerScreen(private val back: Screen) : Screen(Component.literal(U
     /** 切换当前歌曲在指定夹的收藏态,刷新该行 ✓ */
     private fun toggleFolder(folder: FavFolder) {
         val song = NetMusic.player.current
-        if (song == null) return
+        if (song == null) {
+            showFeedback(UiText.t("请先播放歌曲", "Play a song first"))
+            return
+        }
         // BiliActions 回调已切 UI 线程
         BiliActions.toggleFavInFolder(song, folder) { faved, err ->
             if (err != null) {
-                // 轻提示:聊天栏输出错误
-                Minecraft.getInstance().gui.getChat().addClientSystemMessage(
-                    Component.literal(err).withColor(0xFFFF5C5C.toInt()),
-                )
+                showFeedback(err)
                 return@toggleFavInFolder
             }
             // 刷新本地 ✓ 缓存(folderFavs 已被 BiliActions 维护)
             favedFids = BiliActions.favFoldersOf(song.id)
+            // 成功反馈(对齐 MUI 的"已收藏到 X"/"已从 X 移除"Toast)
+            showFeedback(
+                if (faved) UiText.t("已收藏到 ${folder.title}", "Added to favorites: ${folder.title}")
+                else UiText.t("已从 ${folder.title} 移除", "Removed from ${folder.title}"),
+            )
         }
     }
 
     /** 新建收藏夹(成功后刷新列表) */
     private fun submitCreate() {
         val title = editBox?.getValue()?.trim().orEmpty()
-        if (title.isEmpty()) return
+        if (title.isEmpty()) {
+            showFeedback(UiText.t("请输入收藏夹名称", "Please enter a folder name"))
+            return
+        }
         if (creating) return
         creating = true
         BiliActions.createFolder(title) { _, err ->
             creating = false
             if (err != null) {
-                Minecraft.getInstance().gui.getChat().addClientSystemMessage(
-                    Component.literal(err).withColor(0xFFFF5C5C.toInt()),
-                )
+                showFeedback(err)
                 return@createFolder
             }
             createMode = false
             // 新建成功:刷新列表(✓ 态经 refreshFavState 更新)
+            showFeedback(UiText.t("收藏夹已创建", "Folder created"))
             load()
         }
+    }
+
+    /** 显示瞬时反馈消息(仿 MUI Toast;约 2 秒后自动消失) */
+    private fun showFeedback(msg: String) {
+        feedback = msg
+        feedbackUntil = System.currentTimeMillis() + 2000L
     }
 }

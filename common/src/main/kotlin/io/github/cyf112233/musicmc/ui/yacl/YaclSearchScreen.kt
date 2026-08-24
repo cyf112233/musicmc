@@ -25,6 +25,9 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
     private var searching = false
     private var scroll = 0
 
+    /** 是否执行过至少一次成功搜索(区分"未搜索"与"搜索无结果"两个空态) */
+    private var searched = false
+
     /** 搜索请求序号:每次 doSearch 自增,过期请求的结果直接丢弃(先搜 "a" 再搜 "ab",
      *  "a" 结果后到时不得覆盖新结果) */
     private var searchGen = 0
@@ -66,7 +69,16 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
             YaclTheme.drawTextClipped(g, UiText.t("搜索失败: $error", "Search failed: $error"), width / 2 - 180, listY, 11f, 360, YaclTheme.colorError)
             listY += 16
         } else if (results.isEmpty() && !searching) {
-            YaclTheme.drawTextClipped(g, UiText.t("输入关键词,点搜索或回车", "Type a keyword and press Search or Enter"), width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
+            // 区分"未搜索"与"搜索无结果"两个空态(对齐 MUI SearchFragment 的"未找到相关歌曲")
+            val hint = if (searched) {
+                UiText.t("未找到相关歌曲,换个关键词试试", "No related songs found, try a different keyword")
+            } else {
+                UiText.t("输入关键词,点搜索或回车", "Type a keyword and press Search or Enter")
+            }
+            YaclTheme.drawTextClipped(g, hint, width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
+            listY += 16
+        } else if (searching) {
+            YaclTheme.drawTextClipped(g, UiText.t("搜索中…", "Searching…"), width / 2 - 180, listY, 11f, 360, YaclTheme.colorTextDim)
             listY += 16
         }
 
@@ -80,7 +92,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
         while (idx < results.size && y + rowH < h - 8) {
             val song = results[idx]
             RowCoverCache.request(song.picUrl)
-            YaclTheme.drawSongRow(g, song.title, song.artist, false, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, false, listX, y, listW, rowH, mouseX, mouseY, song.picUrl, song.durationMs)
             y += rowH
             idx++
         }
@@ -95,10 +107,12 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
         if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
         if (rectSearchBtn.hit(x, y)) { doSearch(); return true }
         // 结果行点击 → 播放并返回主界面
+        // 行映射上界与绘制一致(绘制止于 h-8):不加 y < height - 8 上界时,
+        // 列表底部空白区会被映射到从未渲染的行(视觉上"点了没反应但吞了事件")
         val listY = 48
         val rowH = 24
         val listX = width / 2 - 180
-        if (x >= listX && x < listX + 360 && y >= listY) {
+        if (x >= listX && x < listX + 360 && y >= listY && y < height - 8) {
             val row = (y - listY).toInt() / rowH + scroll
             if (row in results.indices) {
                 playAndBack(results[row])
@@ -131,7 +145,9 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
 
     private fun playAndBack(song: Song) {
         NetMusic.player.play(song)
-        McScreens.open(YaclMusicScreen())
+        // 返回上一页(主界面)而非 new YaclMusicScreen():保留主界面状态
+        // (点赞态 / 进度拖动缓存)且维持导航栈 —— Back 可回到本搜索页
+        McScreens.open(back)
     }
 
     private fun doSearch() {
@@ -139,8 +155,10 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
         if (keyword.isEmpty() || searching) return
         val gen = ++searchGen
         searching = true
+        searched = true
         error = null
         scroll = 0
+        results.clear() // 清空旧结果,避免新搜索/错误下残留上一页
         NetMusic.source.search(keyword, 30, 0) { list, err ->
             // 回调在后台线程(BilibiliSource 直接 executor.execute 回调):
             // 切回 UI 线程再更新界面字段(否则与渲染线程的读取构成数据竞争)
@@ -149,6 +167,7 @@ class YaclSearchScreen(private val back: Screen) : Screen(Component.literal(UiTe
                 searching = false
                 if (err != null) {
                     error = err
+                    results.clear()
                 } else {
                     results.clear()
                     results.addAll(list)

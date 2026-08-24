@@ -31,6 +31,11 @@ class YaclFavDetailScreen(
     private var error: String? = null
     private var scroll = 0
 
+    /** 每页拉取数量(与 BiliActions.folderSongs 的 ps 一致) */
+    private val pageSize = 20
+    /** 翻页上限(防御 mediaCount 误报导致无限拉取) */
+    private val maxPages = 20
+
     private val rectBackBtn = YaclTheme.Rect(0, 0, 0, 0)
     private val rectPlayAllBtn = YaclTheme.Rect(0, 0, 0, 0)
     private val rectMoreBtn = YaclTheme.Rect(0, 0, 0, 0)
@@ -51,7 +56,8 @@ class YaclFavDetailScreen(
             } else {
                 page++
                 songs.addAll(list)
-                if (list.size < 20 || songs.size >= folder.mediaCount) allLoaded = true
+                // 达页数上限或已拉满媒体数量,或本页不满一页 → 判定全部加载完成
+                if (page >= maxPages || list.size < pageSize || songs.size >= folder.mediaCount) allLoaded = true
             }
         }
     }
@@ -69,6 +75,8 @@ class YaclFavDetailScreen(
         // 收藏夹名居中截断:裸居中 drawText 在长标题下会盖住右侧「播放全部」按钮
         val titleMaxW = (w - 192).coerceAtLeast(40)
         YaclTheme.drawCenteredClipped(g, title, w / 2, 10, 14f, titleMaxW, YaclTheme.colorTextMain)
+        // 媒体数量副标题(对齐 MUI FavFolderDetailFragment 的"N 个内容")
+        YaclTheme.drawCenteredClipped(g, UiText.t("${folder.mediaCount} 个内容", "${folder.mediaCount} items"), w / 2, 26, 9f, titleMaxW, YaclTheme.colorTextDim)
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
         YaclTheme.drawBtn(g, rectPlayAllBtn, UiText.t("播放全部", "Play All"), mouseX, mouseY, accent = true)
 
@@ -94,7 +102,7 @@ RowCoverCache.pump()
         while (idx < songs.size && y + rowH < h - 32) {
             val song = songs[idx]
             RowCoverCache.request(song.picUrl)
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl, song.durationMs)
             y += rowH
             idx++
         }

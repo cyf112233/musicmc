@@ -47,6 +47,12 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
     @Volatile
     private var status: String = UiText.t("二维码生成中…", "Generating QR…")
 
+    /** 状态类别(驱动文字配色;不依赖中/英文子串匹配,避免 locale 下颜色失效) */
+    @Volatile
+    private var statusKind: StatusKind = StatusKind.NEUTRAL
+
+    enum class StatusKind { SUCCESS, ERROR, NEUTRAL }
+
     @Volatile
     private var generation = 0
 
@@ -67,12 +73,17 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
         // 同时释放已注册的纹理(close 只关 Java 对象,TextureManager 里仍挂着 id,
         // 下次进入同 id 会 register 覆盖,但释放更干净,防纹理句柄泄漏)
         runCatching { textureManager.release(qrId) }
+        // 释放尚未被渲染线程 pump 的排队二维码(NativeImage 是原生内存,不释放会泄漏)
+        while (pendingQr.poll() != null) {
+            // poll 取出即丢弃;NativeImage 由 GC 回收(无显式 close API 的版本),此处仅排空队列
+        }
         super.onClose()
     }
 
     private fun startLogin() {
         val gen = ++generation
         status = UiText.t("二维码生成中…", "Generating QR…")
+        statusKind = StatusKind.NEUTRAL
         Async.run {
             try {
                 val qr = BiliHttp.qrGenerate()
@@ -82,12 +93,14 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
                     pendingQr.add(img)
                 } else {
                     status = UiText.t("二维码生成失败", "QR generation failed")
+                    statusKind = StatusKind.ERROR
                     return@run
                 }
                 pollLoop(gen, qr.qrcodeKey)
             } catch (e: Exception) {
                 if (gen != generation) return@run
                 status = UiText.t("二维码生成失败: ${e.message ?: "网络错误"}", "QR generation failed: ${e.message ?: "network error"}")
+                statusKind = StatusKind.ERROR
             }
         }
     }
@@ -109,9 +122,11 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
                             if (gen != generation) return@onUi
                             if (cookie.isNullOrBlank()) {
                                 status = UiText.t("登录失败:未获取到登录 Cookie", "Login failed: no login cookie received")
+                                statusKind = StatusKind.ERROR
                             } else {
                                 NetMusic.setBilibiliCookie(cookie)
                                 status = UiText.t("登录成功", "Logged in")
+                                statusKind = StatusKind.SUCCESS
                                 runCatching { McScreens.open(back) }
                             }
                         }
@@ -119,11 +134,21 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
                     }
                     QrStatus.EXPIRED -> {
                         status = UiText.t("二维码已过期,请点击刷新", "QR code expired, click to refresh")
+                        statusKind = StatusKind.ERROR
                         return@run
                     }
-                    QrStatus.SCANNED -> status = UiText.t("已扫码,请在手机上确认", "Scanned, confirm on your phone")
-                    QrStatus.WAIT -> status = UiText.t("等待扫码…", "Waiting for scan…")
-                    null -> status = UiText.t("轮询失败,自动重试…", "Polling failed, retrying…")
+                    QrStatus.SCANNED -> {
+                        status = UiText.t("已扫码,请在手机上确认", "Scanned, confirm on your phone")
+                        statusKind = StatusKind.NEUTRAL
+                    }
+                    QrStatus.WAIT -> {
+                        status = UiText.t("等待扫码…", "Waiting for scan…")
+                        statusKind = StatusKind.NEUTRAL
+                    }
+                    null -> {
+                        status = UiText.t("轮询失败,自动重试…", "Polling failed, retrying…")
+                        statusKind = StatusKind.NEUTRAL
+                    }
                 }
                 try {
                     Thread.sleep(2000)
@@ -165,10 +190,10 @@ class YaclLoginScreen(private val back: Screen?) : Screen(Component.literal(UiTe
             g.drawText(UiText.t("二维码生成中…", "Generating QR…"), qrX + 40, qrY + qrSize / 2 - 5, 11f, 1f, YaclTheme.colorTextDim)
         }
 
-        val statusColor = when {
-            status.contains("Logged in") || status.contains("success") -> YaclTheme.colorAccentBright
-            status.contains("failed") || status.contains("expired") -> YaclTheme.colorError
-            else -> YaclTheme.colorTextSub
+        val statusColor = when (statusKind) {
+            StatusKind.SUCCESS -> YaclTheme.colorAccentBright
+            StatusKind.ERROR -> YaclTheme.colorError
+            StatusKind.NEUTRAL -> YaclTheme.colorTextSub
         }
         // 状态文本可能带网络异常 e.message(长 URL 等):居中截断,避免顶到屏幕边缘
         YaclTheme.drawCenteredClipped(g, status, w / 2, qrY + qrSize + 14, 11f, (w - 24).coerceAtLeast(40), statusColor)

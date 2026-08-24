@@ -3,6 +3,7 @@ package io.github.cyf112233.musicmc.ui.yacl
 import io.github.cyf112233.musicmc.client.GuiGraphicsHudGui
 import io.github.cyf112233.musicmc.client.RowCoverCache
 import io.github.cyf112233.musicmc.client.UiText
+import io.github.cyf112233.musicmc.ui.Widgets
 
 /**
  * YACL 版界面共享主题:配色与绘制辅助。
@@ -141,12 +142,15 @@ object YaclTheme {
         // 滑块(圆形捏手近似:方块 + 边框;active/hover 放大)
         if (showThumb && fillW > 0) {
             val thumbSize = if (active || hover) 9 else 7
-            val tx = (r.x1 + fillW - thumbSize / 2).coerceIn(r.x1, r.x2 - thumbSize)
-            val ty = r.y1 + (h - thumbSize) / 2
-            fillRound(g, tx, ty, thumbSize, thumbSize, thumbSize / 2, colorTextMain, colorCardBorder)
-            if (active || hover) {
-                g.fill(tx - 2, ty - 2, tx + thumbSize + 2, ty - 1, 0x333DDC97.toInt())
-                g.fill(tx - 2, ty + thumbSize + 1, tx + thumbSize + 2, ty + thumbSize + 2, 0x333DDC97.toInt())
+            // 条宽小于滑块大小时不画滑块(避免 coerceIn(min > max) 抛异常)
+            if (w >= thumbSize) {
+                val tx = (r.x1 + fillW - thumbSize / 2).coerceIn(r.x1, r.x2 - thumbSize)
+                val ty = r.y1 + (h - thumbSize) / 2
+                fillRound(g, tx, ty, thumbSize, thumbSize, thumbSize / 2, colorTextMain, colorCardBorder)
+                if (active || hover) {
+                    g.fill(tx - 2, ty - 2, tx + thumbSize + 2, ty - 1, 0x333DDC97.toInt())
+                    g.fill(tx - 2, ty + thumbSize + 1, tx + thumbSize + 2, ty + thumbSize + 2, 0x333DDC97.toInt())
+                }
             }
         } else if (fillW > 0 && !showThumb) {
             // 无滑块模式:填充段端头 1px 高亮点
@@ -154,16 +158,16 @@ object YaclTheme {
         }
     }
 
-    /** 顶部工具按钮(胶囊形状;hover 提亮 + 主色描边) */
+    /** 顶部工具按钮(胶囊形状;hover 提亮 + 主色描边;标签超宽时截断) */
     fun drawPill(g: GuiGraphicsHudGui, r: Rect, label: String, mouseX: Int, mouseY: Int) {
         val hover = mouseX in r.x1 until r.x2 && mouseY in r.y1 until r.y2
         val bg = if (hover) colorBtnHover else colorBtn
         val h2 = (r.y2 - r.y1) / 2
         fillRound(g, r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, h2, bg, if (hover) colorAccentDark else null)
-        g.drawText(label, r.x1 + 4, r.y1 + 2, 10f, 1f, if (hover) colorAccentBright else colorTextSub)
+        g.drawText(truncate(g, label, (r.x2 - r.x1 - 8).coerceAtLeast(4), 10f), r.x1 + 4, r.y1 + 2, 10f, 1f, if (hover) colorAccentBright else colorTextSub)
     }
 
-    /** 普通按钮(圆角 + hover 提亮 + 主题色文字;[accent] 为主题色实底按钮) */
+    /** 普通按钮(圆角 + hover 提亮 + 主题色文字;[accent] 为主题色实底按钮;标签超宽时截断) */
     fun drawBtn(g: GuiGraphicsHudGui, r: Rect, label: String, mouseX: Int, mouseY: Int, accent: Boolean = false) {
         val hover = mouseX in r.x1 until r.x2 && mouseY in r.y1 until r.y2
         val bg = when {
@@ -174,7 +178,7 @@ object YaclTheme {
         val h2 = (r.y2 - r.y1) / 2
         fillRound(g, r.x1, r.y1, r.x2 - r.x1, r.y2 - r.y1, h2, bg, if (hover && !accent) colorAccentDark else null)
         val textColor = if (accent) colorTextMain else if (hover) colorAccentBright else colorTextSub
-        g.drawText(label, r.x1 + 6, r.y1 + 4, 11f, 1f, textColor)
+        g.drawText(truncate(g, label, (r.x2 - r.x1 - 12).coerceAtLeast(4), 11f), r.x1 + 6, r.y1 + 4, 11f, 1f, textColor)
     }
 
     /** 居中小标题(按 [sizePx] 字号,以 [centerX] 为水平中心)。
@@ -254,6 +258,7 @@ object YaclTheme {
     /**
      * 歌曲行(标题+歌手;当前播放左侧主题色竖条+底色,hover 高亮)。
      * [coverUrl] 非空时行首绘制缩略封面(经 RowCoverCache,异步加载)。
+     * [durationMs] 非空时行尾右对齐绘制时长(对齐 MUI SongListAdapter 的时长列)。
      */
     fun drawSongRow(
         g: GuiGraphicsHudGui,
@@ -267,6 +272,7 @@ object YaclTheme {
         mouseX: Int,
         mouseY: Int,
         coverUrl: String? = null,
+        durationMs: Int? = null,
     ) {
         val hover = mouseY in y until y + rowH && mouseX in x until x + w
         when {
@@ -276,6 +282,8 @@ object YaclTheme {
             }
             hover -> g.fill(x, y, x + w, y + rowH, colorRowHover)
         }
+        // 行尾预留时长列(右对齐,约 42px)
+        val durW = if (durationMs != null) 42 else 0
         var textX = x + 10
         if (coverUrl != null) {
             // 行首缩略封面(12px 圆角块;未就绪时深色占位)
@@ -288,8 +296,13 @@ object YaclTheme {
             }
             textX = x + 4 + coverSize + 6
         }
-        drawTextClipped(g, title.ifBlank { UiText.t("未知标题", "Unknown") }, textX, y + 2, 11f, x + w - textX - 6, if (current) colorTextMain else 0xFFDDDDDD.toInt())
-        drawTextClipped(g, artist, textX, y + 12, 9f, x + w - textX - 6, colorTextDim)
+        drawTextClipped(g, title.ifBlank { UiText.t("未知标题", "Unknown") }, textX, y + 2, 11f, x + w - textX - 6 - durW, if (current) colorTextMain else 0xFFDDDDDD.toInt())
+        drawTextClipped(g, artist, textX, y + 12, 9f, x + w - textX - 6 - durW, colorTextDim)
+        if (durationMs != null) {
+            val dt = Widgets.formatTime(durationMs)
+            val tw = (g.textWidth(dt).toFloat() * (9f / 12f)).toInt()
+            g.drawText(dt, x + w - durW + (durW - tw) - 4, y + 6, 9f, 1f, colorTextFaint)
+        }
     }
 
     /** General行(标题+副标题;hover 高亮) */
@@ -316,8 +329,10 @@ object YaclTheme {
         drawTextClipped(g, sub, x + 6, y + 14, 9f, w - 12, colorTextDim)
     }
 
-    /** 列表底部滚动提示 */
+    /** 列表底部滚动提示(右对齐到屏幕右缘,避免窄屏溢出) */
     fun drawScrollHint(g: GuiGraphicsHudGui, w: Int, h: Int) {
-        g.drawText(UiText.t("↑↓ 滚动查看更多", "Scroll for more"), w / 2 + 100, h - 18, 9f, 1f, colorTextFaint)
+        val t = UiText.t("↑↓ 滚动查看更多", "Scroll for more")
+        val tw = (g.textWidth(t).toFloat() * (9f / 12f)).toInt()
+        g.drawText(t, (w - tw - 12).coerceAtLeast(4), h - 18, 9f, 1f, colorTextFaint)
     }
 }

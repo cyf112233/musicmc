@@ -32,6 +32,9 @@ class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "
     private var grabDX = 0f
     private var grabDY = 0f
 
+    /** 上次预览的歌曲 id(换歌时触发封面加载;编辑器打开期间 MusicHudRenderer 提前返回不 prepare) */
+    private var lastSongId: String? = null
+
     private val rectReset = YaclTheme.Rect(0, 0, 0, 0)
     private val rectDone = YaclTheme.Rect(0, 0, 0, 0)
 
@@ -47,6 +50,14 @@ class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "
         // 解码完成、待渲染线程建纹理),否则打开编辑器时封面若尚未就绪则永远只显示
         // 占位块(与 YaclMusicScreen.extractRenderState 的 pump 调用保持一致)
         CoverTextureCache.pump()
+
+        // 换歌时主动 prepare 封面:编辑器打开期间 MusicHudRenderer.onFrame 提前返回
+        // (任意 Screen 打开),不会调用 prepare,故此处自行驱动,保证切歌后封面预览刷新
+        val currentSong = NetMusic.player.current
+        if (currentSong != null && currentSong.id != lastSongId) {
+            lastSongId = currentSong.id
+            CoverTextureCache.prepare(currentSong.picUrl)
+        }
 
         // HUD 面板预览(尺寸随缩放)
         val panelW = (190 * scale).toInt()
@@ -161,9 +172,18 @@ class YaclHudEditorScreen : Screen(Component.literal(UiText.t("HUD 编辑器", "
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
-        scale = (scale - dy.toFloat() * 0.05f).coerceIn(0.5f, 2.0f)
+        // 惯例:向上滚动(dy>0,远离用户)= 放大;与 MUI 编辑器滚轮语义一致
+        scale = (scale + dy.toFloat() * 0.05f).coerceIn(0.5f, 2.0f)
         save()
         return true
+    }
+
+    override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        // 松手时兜底落盘一次(拖动中已逐帧保存,此处幂等无害);并清除拖拽态,
+        // 避免在窗外松手后 dragging 残留、下次 mouseDragged 沿用过期 grab 偏移
+        if (dragging) save()
+        dragging = false
+        return super.mouseReleased(event)
     }
 
     override fun isPauseScreen(): Boolean = false

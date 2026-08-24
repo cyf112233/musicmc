@@ -53,6 +53,8 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
     private var searchMode = false
     private var candidates: List<LyricCandidate> = emptyList()
     private var searching = false
+    /** 搜索模式下的候选列表滚动偏移(候选多于一屏时可滚) */
+    private var candidateScroll = 0
 
     private var editBox: EditBox? = null
 
@@ -214,17 +216,24 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             return
         }
         if (candidates.isEmpty()) {
-            g.drawText(UiText.t("输入关键词搜索三源歌词", "Search lyrics from 3 sources"), w / 2 - 100, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            // 搜索失败错误优先显示;未搜索过显示提示
+            if (error != null) {
+                YaclTheme.drawCenteredClipped(g, UiText.t("搜索失败: $error", "Search failed: $error"), w / 2, h / 2 - 8, 11f, (w - 48).coerceAtLeast(40), YaclTheme.colorError)
+            } else {
+                g.drawText(UiText.t("输入关键词搜索三源歌词", "Search lyrics from 3 sources"), w / 2 - 100, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
+            }
             return
         }
 
-        // 候选列表
+        // 候选列表(可滚动;点击绑定)
         val rowH = 22
         val listX = 24
         val listW = w - 48
-        var y = 74
-        for (c in candidates) {
-            if (y + rowH > h - 8) break
+        val listTop = 74
+        var idx = candidateScroll
+        var y = listTop
+        while (idx < candidates.size && y + rowH < h - 8) {
+            val c = candidates[idx]
             val hover = mouseY in y until y + rowH && mouseX in listX until listX + listW
             if (hover) g.fill(listX, y, listX + listW, y + rowH, YaclTheme.colorRowHover)
             YaclTheme.drawTextClipped(g, c.title.ifBlank { UiText.t("未知歌曲", "Unknown") }, listX + 6, y + 1, 11f, listW - 130, YaclTheme.colorTextMain)
@@ -239,8 +248,11 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             )
             g.drawText(Widgets.formatTime(c.durationMs), listX + listW - 52, y + 4, 9f, 1f, YaclTheme.colorTextFaint)
             y += rowH
+            idx++
         }
-        YaclTheme.drawScrollHint(g, w, h)
+        if (candidates.size > (h - listTop) / rowH) {
+            YaclTheme.drawScrollHint(g, w, h)
+        }
     }
 
     // ---------------- 加载 / 偏移 / 搜索 ----------------
@@ -274,6 +286,8 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
         searchMode = true
         candidates = emptyList()
         searching = false
+        candidateScroll = 0
+        error = null
         editBox?.setValue("")
         editBox?.setFocused(true)
     }
@@ -283,6 +297,7 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
         searchMode = false
         candidates = emptyList()
         searching = false
+        candidateScroll = 0
     }
 
     private fun doSearch() {
@@ -338,13 +353,13 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
             if (rectSearchBackBtn.hit(x, y)) { exitSearchMode(); return true }
             if (rectSearchGoBtn.hit(x, y)) { doSearch(); return true }
             // EditBox 点击聚焦交给 MC Screen 自动分发(addWidget 注册的组件)
-            // 候选行点击绑定
+            // 候选行点击绑定(考虑滚动偏移;上界与绘制一致,避免空白区误绑定)
             if (candidates.isNotEmpty()) {
                 val rowH = 22
                 val listX = 24
                 val listW = width - 48
-                if (x >= listX && x < listX + listW && y >= 74) {
-                    val row = (y - 74).toInt() / rowH
+                if (x >= listX && x < listX + listW && y >= 74 && y < height - 8) {
+                    val row = (y - 74).toInt() / rowH + candidateScroll
                     if (row in candidates.indices) {
                         bindCandidate(row)
                         return true
@@ -368,15 +383,25 @@ class YaclLyricScreen(private val back: Screen) : Screen(Component.literal(UiTex
                 return true
             }
             val box = editBox
+            // 输入框聚焦时交给 EditBox 处理;未聚焦时交回上级(Esc 可关闭本屏),
+            // 避免搜索模式下 Esc 永远被吞
             if (box != null && box.isFocused) {
                 if (box.keyPressed(event)) return true
             }
-            return true
+            return super.keyPressed(event)
         }
         return super.keyPressed(event)
     }
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
+        if (searchMode) {
+            // 候选列表可滚动:不干扰歌词 autoFollow 状态
+            if (candidates.isEmpty()) return false
+            val rowH = 22
+            val maxScroll = (candidates.size - (height - 74) / rowH).coerceAtLeast(0)
+            candidateScroll = (candidateScroll - dy.toInt()).coerceIn(0, maxScroll)
+            return true
+        }
         // 无歌词时不吞滚轮事件(页面无可滚动内容,交给上级处理)
         if (lines.isEmpty()) return false
         autoFollow = false

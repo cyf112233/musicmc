@@ -41,7 +41,11 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
         }
     }
 
+    /** 是否已触发过加载(避免登录返回后 folders 恒为 null 卡在"加载中") */
+    private var loadTriggered = false
+
     private fun load() {
+        loadTriggered = true
         error = null
         BiliActions.folders { list, err ->
             if (err != null) error = err else folders = list
@@ -69,6 +73,10 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
 
         val nick = nickname
         if (nick != null) YaclTheme.drawTextClipped(g, UiText.t("已登录: $nick", "Logged in as: $nick"), w / 2 + 40, 12, 9f, w / 2 - 60, YaclTheme.colorAccentBright)
+
+        // 登录返回守卫:init() 只在首次触发加载,登录成功后同屏实例返回时可能不再调 init();
+        // 这里在渲染帧里兜底 —— 已登录但从未加载过收藏夹(如刚扫码回来)则补一次 load
+        if (!loadTriggered && folders == null && error == null) load()
 
         val list = folders
         if (list == null && error == null) {
@@ -106,15 +114,21 @@ class YaclFavScreen(private val back: Screen) : Screen(Component.literal(UiText.
         val x = event.x()
         val y = event.y()
         if (rectBackBtn.hit(x, y)) { McScreens.open(back); return true }
-        if (rectLoginBtn.hit(x, y)) { McScreens.open(YaclLoginScreen(this)); return true }
-        if (rectRefreshBtn.hit(x, y)) { load(); return true }
+        // 只在绘制它们的分支内检查命中:登录/重试按钮仅在特定状态绘制,
+        // 无状态守卫时旧坐标会残留在鼠标点击判定区,误触发(见 stale-rect 问题)
+        if (!NetMusic.bilibiliLoggedIn() && rectLoginBtn.hit(x, y)) {
+            McScreens.open(YaclLoginScreen(this))
+            return true
+        }
+        if (error != null && rectRefreshBtn.hit(x, y)) { load(); return true }
         val list = folders ?: return super.mouseClicked(event, doubleClick)
         if (list.isNotEmpty()) {
             val rowH = 24
             val listX = 12
             val listW = width - 24
-            // 命中区与绘制同宽(旧代码硬编码 x < listX + 360,宽屏下后半行可点无响应)
-            if (x >= listX && x < listX + listW && y >= 40) {
+            // 命中区与绘制同宽(旧代码硬编码 x < listX + 360,宽屏下后半行可点无响应);
+            // 上界与绘制一致(绘制止于 h-8),避免空白区映射到未渲染行
+            if (x >= listX && x < listX + listW && y >= 40 && y < height - 8) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
                     McScreens.open(YaclFavDetailScreen(list[row], this))

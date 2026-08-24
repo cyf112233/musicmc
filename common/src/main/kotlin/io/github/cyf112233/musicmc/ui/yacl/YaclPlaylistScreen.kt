@@ -31,6 +31,9 @@ class YaclPlaylistScreen(
     private val rectBackBtn = YaclTheme.Rect(0, 0, 0, 0)
     private val rectPlayAllBtn = YaclTheme.Rect(0, 0, 0, 0)
 
+    /** 歌单封面头部卡片高度(列表从该行之下开始) */
+    private val listTop: Int get() = 40 + 64 + 12
+
     override fun init() {
         super.init()
         if (songs == null && error == null) load()
@@ -67,6 +70,24 @@ class YaclPlaylistScreen(
         rectPlayAllBtn.x1 = w - 96; rectPlayAllBtn.y1 = 10; rectPlayAllBtn.x2 = w - 12; rectPlayAllBtn.y2 = 26
         YaclTheme.drawBtn(g, rectPlayAllBtn, UiText.t("播放全部", "Play All"), mouseX, mouseY, accent = true)
 
+        // 歌单封面 + 歌曲数(对齐 MUI PlaylistDetailFragment 的封面头部卡片)
+        RowCoverCache.pump()
+        val headerY = 40
+        val coverSize = 64
+        val coverX = 12
+        val coverUrl = playlist.coverUrl
+        val coverId = RowCoverCache.identifier(coverUrl)
+        if (coverId != null) {
+            YaclTheme.drawCover(g, coverId, coverX, headerY, coverSize)
+        } else {
+            YaclTheme.drawCoverPlaceholder(g, coverX, headerY, coverSize)
+            // 封面未就绪:发起加载(幂等;后续帧 pump 建纹理后自然换上)
+            if (coverUrl != null) RowCoverCache.request(coverUrl)
+        }
+        val countText = if (songs == null) UiText.t("加载中…", "Loading…") else UiText.t("${songs!!.size} 首歌曲", "${songs!!.size} songs")
+        YaclTheme.drawTextClipped(g, title, coverX + coverSize + 10, headerY, 13f, w - coverX - coverSize - 110, YaclTheme.colorTextMain)
+        YaclTheme.drawTextClipped(g, countText, coverX + coverSize + 10, headerY + 18, 10f, w - coverX - coverSize - 110, YaclTheme.colorTextDim)
+
         val list = songs
         if (list == null && error == null) {
             g.drawText(UiText.t("加载歌曲中…", "Loading songs…"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
@@ -80,21 +101,21 @@ class YaclPlaylistScreen(
             g.drawText(UiText.t("歌单暂无歌曲", "No songs in this playlist"), w / 2 - 60, h / 2 - 8, 12f, 1f, YaclTheme.colorTextDim)
             return
         }
-RowCoverCache.pump()
+        RowCoverCache.pump()
         val rowH = 24
         val listX = 12
         val listW = w - 24
         val currentId = player.current?.id
         var idx = scroll
-        var y = 40
+        var y = listTop
         while (idx < list.size && y + rowH < h - 8) {
             val song = list[idx]
             RowCoverCache.request(song.picUrl)
-            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl)
+            YaclTheme.drawSongRow(g, song.title, song.artist, song.id == currentId, listX, y, listW, rowH, mouseX, mouseY, song.picUrl, song.durationMs)
             y += rowH
             idx++
         }
-        if (list.size > (h - 40) / rowH) {
+        if (list.size > (h - listTop) / rowH) {
             YaclTheme.drawScrollHint(g, w, h)
         }
     }
@@ -112,8 +133,9 @@ RowCoverCache.pump()
             val rowH = 24
             val listX = 12
             val listW = width - 24
-            if (x >= listX && x < listX + listW && y >= 40) {
-                val row = (y - 40).toInt() / rowH + scroll
+            // 上界与绘制一致(绘制止于 h-8),避免空白区映射到未渲染行
+            if (x >= listX && x < listX + listW && y >= listTop && y < height - 8) {
+                val row = (y - listTop).toInt() / rowH + scroll
                 if (row in list.indices) {
                     player.play(list[row], list, row)
                     return true
@@ -125,7 +147,7 @@ RowCoverCache.pump()
 
     override fun mouseScrolled(x: Double, y: Double, dx: Double, dy: Double): Boolean {
         val rowH = 24
-        val maxScroll = ((songs?.size ?: 0) - (height - 40) / rowH).coerceAtLeast(0)
+        val maxScroll = ((songs?.size ?: 0) - (height - listTop) / rowH).coerceAtLeast(0)
         scroll = (scroll - dy.toInt()).coerceIn(0, maxScroll)
         return true
     }

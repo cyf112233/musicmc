@@ -87,7 +87,10 @@ class YaclDiscoverScreen(private val back: Screen) : Screen(Component.literal(Ui
         if (list.isNotEmpty()) {
             val rowH = 24
             val listX = 12
-            if (x >= listX && x < listX + 360 && y >= 40) {
+            val listW = width - 24
+            // 命中区与绘制同宽(旧代码硬编码 x < listX + 360,宽屏下后半行可点无响应);
+            // 上界与绘制一致(绘制止于 h-8),避免空白区映射到未渲染行
+            if (x >= listX && x < listX + listW && y >= 40 && y < height - 8) {
                 val row = (y - 40).toInt() / rowH + scroll
                 if (row in list.indices) {
                     McScreens.open(YaclPlaylistScreen(list[row], this))

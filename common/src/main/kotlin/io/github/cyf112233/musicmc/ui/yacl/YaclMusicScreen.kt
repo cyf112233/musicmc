@@ -225,7 +225,17 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
             rectDiscover.hit(x, y) -> { McScreens.open(YaclDiscoverScreen(this)); return true }
             rectQueue.hit(x, y) -> { McScreens.open(YaclQueueScreen(this)); return true }
             rectFav.hit(x, y) -> { McScreens.open(YaclFavScreen(this)); return true }
-            rectLyrics.hit(x, y) -> { McScreens.open(YaclLyricScreen(this)); return true }
+            rectLyrics.hit(x, y) -> {
+                // 歌词总开关关闭时给出提示(与 MUI 主界面 goLyric 守卫一致)
+                if (!config.lyricsEnabled) {
+                    Minecraft.getInstance().gui.getChat().addClientSystemMessage(
+                        Component.literal(UiText.t("歌词功能已关闭,请在设置中开启", "Lyrics are disabled, enable them in Settings")).withColor(YaclTheme.colorWarn),
+                    )
+                } else {
+                    McScreens.open(YaclLyricScreen(this))
+                }
+                return true
+            }
             rectSettings.hit(x, y) -> { NetMusic.openConfigScreen(); return true }
             rectPrev.hit(x, y) -> { player.prev(); return true }
             rectPlay.hit(x, y) -> { player.toggle(); return true }
