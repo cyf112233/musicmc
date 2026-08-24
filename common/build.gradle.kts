@@ -36,10 +36,6 @@ dependencies {
     // API 在 3.3.x/3.4.x 稳定一致,版本与 MC 运行期实际值无强绑定)
     compileOnly("org.lwjgl:lwjgl:3.4.2")
     compileOnly("org.lwjgl:lwjgl-openal:3.4.2")
-    // YACL 界面引用 net.minecraft.network.chat.Component(其父接口 com.mojang.brigadier.Message)
-    // 与 org.lwjgl.glfw.GLFW 键常量;独立编译需要这两者显式上 classpath(loader 侧由 MC 提供)
-    compileOnly("com.mojang:brigadier:1.3.10")
-    compileOnly("org.lwjgl:lwjgl-glfw:3.4.1")
     // YACL 现代化 UI(Android / 无 ModernUI 时的第二 UI 后端;双平台 fabric+neoforge)。
     // 编译用 fabric 构件(gui 核心类双平台一致;运行期由用户安装对应平台 YACL mod 提供)
     compileOnly(files("libs/yacl-3.9.6-26.1.jar"))
