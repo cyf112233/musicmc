@@ -209,6 +209,10 @@ dependencies {
     implementation("com.google.zxing:core:$zxingVersion")
     jarJar("com.google.zxing:core:$zxingVersion")
 
+    // ---- 音乐房间纯协议/逻辑模块(零 MC 依赖):jarJar 打包进 mod jar ----
+    implementation(project(":room"))
+    jarJar(project(":room"))
+
     // ---- FFmpeg 解码引擎三件套(播放器主引擎)----
     // ffmpeg.jar(绑定 API)+ javacpp.jar(Loader 运行时)+ javacpp 平台 jar(本机 libjnijavacpp.so)。
     // javacpp 平台 jar 的 classifier 即平台名(linux-x86_64);FFmpeg 原生 .so 由

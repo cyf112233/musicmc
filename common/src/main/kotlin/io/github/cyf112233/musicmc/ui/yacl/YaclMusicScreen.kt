@@ -37,6 +37,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
     private val rectLyrics = YaclTheme.Rect(0, 0, 0, 0)
     private val rectSettings = YaclTheme.Rect(0, 0, 0, 0)
     private val rectClose = YaclTheme.Rect(0, 0, 0, 0)
+    private val rectRoom = YaclTheme.Rect(0, 0, 0, 0)
     private val rectPrev = YaclTheme.Rect(0, 0, 0, 0)
     private val rectPlay = YaclTheme.Rect(0, 0, 0, 0)
     private val rectNext = YaclTheme.Rect(0, 0, 0, 0)
@@ -89,6 +90,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val topBtnW = 48
         val topBtnH = 15
         val topBtnY = 8
+        // 8 枚工具按钮从右往左排列:Close/Settings/Lyrics/Fav/Queue/Discover/Search/Room
         rectClose.set(w - topBtnW - 4, topBtnY, w - 4, topBtnY + topBtnH)
         rectSettings.set(w - 2 * topBtnW - 8, topBtnY, w - topBtnW - 4, topBtnY + topBtnH)
         rectLyrics.set(w - 3 * topBtnW - 12, topBtnY, w - 2 * topBtnW - 8, topBtnY + topBtnH)
@@ -96,6 +98,8 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         rectQueue.set(w - 5 * topBtnW - 20, topBtnY, w - 4 * topBtnW - 16, topBtnY + topBtnH)
         rectDiscover.set(w - 6 * topBtnW - 24, topBtnY, w - 5 * topBtnW - 20, topBtnY + topBtnH)
         rectSearch.set(w - 7 * topBtnW - 28, topBtnY, w - 6 * topBtnW - 24, topBtnY + topBtnH)
+        rectRoom.set(w - 8 * topBtnW - 32, topBtnY, w - 7 * topBtnW - 28, topBtnY + topBtnH)
+        YaclTheme.drawPill(g, rectRoom, UiText.t("房间", "Room"), mouseX, mouseY)
         YaclTheme.drawPill(g, rectSearch, UiText.t("搜索", "Search"), mouseX, mouseY)
         YaclTheme.drawPill(g, rectDiscover, UiText.t("发现", "Discover"), mouseX, mouseY)
         YaclTheme.drawPill(g, rectQueue, UiText.t("队列", "Queue"), mouseX, mouseY)
@@ -221,6 +225,7 @@ class YaclMusicScreen : Screen(Component.literal("MusicMC")) {
         val y = event.y()
         when {
             rectClose.hit(x, y) -> { McScreens.open(null); return true }
+            rectRoom.hit(x, y) -> { McScreens.open(YaclRoomScreen(this)); return true }
             rectSearch.hit(x, y) -> { McScreens.open(YaclSearchScreen(this)); return true }
             rectDiscover.hit(x, y) -> { McScreens.open(YaclDiscoverScreen(this)); return true }
             rectQueue.hit(x, y) -> { McScreens.open(YaclQueueScreen(this)); return true }

@@ -161,6 +161,11 @@ dependencies {
         include(project(":native"))
     }
 
+    // 音乐房间纯协议/逻辑模块(零 MC 依赖):客户端收发 + 服务端中继共用,
+    // include 嵌套进 mod jar 供 javacpp 等运行时加载。
+    implementation(project(":room"))
+    include(project(":room"))
+
     // LDlib 现代化 UI:common 源码编译期引用其 API(common/libs 本地 jar;
     // LDlib 无 Fabric 版,运行期 fabric 永不使用 LDLib UI,仅编译期需要类)
     compileOnly(files("../common/libs/yacl-3.9.6-26.1.jar"))

@@ -16,6 +16,8 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent
 import net.neoforged.neoforge.common.NeoForge
+import net.neoforged.neoforge.event.entity.player.PlayerEvent
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import org.lwjgl.glfw.GLFW
 import org.slf4j.LoggerFactory
 import io.github.cyf112233.musicmc.NetMusic
@@ -49,6 +51,18 @@ class NetMusicNeoForge(private val bus: IEventBus) {
         // 幂等注入平台实现(common 契约)
         NetMusic.init(NeoForgePlatform())
 
+        // 音乐房间:注册 musicmc:room 自定义 payload(客户端+服务端共用 handler,
+        // 按 flow() 区分收发方向;服务端同时做房间中继)
+        val roomHandler = NeoRoomHandler()
+        bus.addListener(RegisterPayloadHandlersEvent::class.java) { event ->
+            roomHandler.register(event.registrar("1"))
+        }
+        // 服务端玩家退出:清理其房间归属(neoforge 玩家退出事件,主总线)
+        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent::class.java) { e ->
+            val p = e.entity
+            if (p is net.minecraft.server.level.ServerPlayer) roomHandler.onPlayerQuit(p)
+        }
+
         // 以下全部为物理客户端专属逻辑:
         // 先判断 dist,避免 DedicatedServer 上加载 @OnlyIn(Dist.CLIENT) 的客户端类
         // (KeyMapping / MuiModApi 等)导致 ClassNotFoundError。
@@ -56,6 +70,9 @@ class NetMusicNeoForge(private val bus: IEventBus) {
         if (FMLEnvironment.getDist().isClient) {
             // 0) 聊天栏歌词:每句歌词同步输出到玩家聊天栏(独立于 HUD,开关见设置)
             NetMusic.player.addListener(ChatLyricSender)
+
+            // 0b) 房间客户端:注入传输(RoomSession 检测可用性;玩家进服前不可用,静默)
+            roomHandler.initClient()
 
             // 1) 按键注册:RegisterKeyMappingsEvent 是 IModBusEvent,挂 mod 总线
             bus.addListener(RegisterKeyMappingsEvent::class.java) { event ->

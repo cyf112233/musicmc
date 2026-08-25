@@ -39,6 +39,9 @@ class NetMusicFabricClient : ClientModInitializer {
         // 聊天栏歌词:每句歌词同步输出到玩家聊天栏(独立于 HUD,开关见设置)
         NetMusic.player.addListener(ChatLyricSender)
 
+        // 音乐房间:注册 musicmc:room 自定义 payload 通道(Fabric 客户端桥接)
+        io.github.cyf112233.musicmc.fabric.FabricRoomBootstrap.init()
+
         KeyMappingHelper.registerKeyMapping(openMusicKey)
 
         ClientTickEvents.END_CLIENT_TICK.register { _ ->

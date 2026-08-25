@@ -1,0 +1,6 @@
+name: musicmc-room
+version: ${version}
+main: io.github.cyf112233.musicmc.paper.MusicRoomPaper
+api-version: 1.13
+description: MusicMC 音乐房间服务端中继(Paper)。
+authors: [cyf112233]

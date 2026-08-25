@@ -42,6 +42,8 @@ dependencies {
 
     // 运行期依赖
     implementation("com.google.code.gson:gson:${property("gson_version")}")
+    // 音乐房间纯协议/逻辑模块(零 MC 依赖;fabric/neoforge include、paper shadow 打包)
+    implementation(project(":room"))
     // 二维码生成(扫码登录 UI 用;fabric include / neoforge jarJar 打入最终产物)
     implementation("com.google.zxing:core:${property("zxing_version")}")
     // FFmpeg 解码引擎(唯一播放引擎):org.bytedeco:ffmpeg = Java 绑定 API,
